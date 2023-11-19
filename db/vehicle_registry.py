@@ -1,0 +1,84 @@
+import csv
+from dataclasses import asdict, dataclass
+from typing import Iterable, Protocol, Self
+
+from .permit import Permits
+
+VehicleDict = dict[str, str | int]
+
+# this got way too complex for such a simple thing
+
+
+@dataclass
+class VehicleInfo:
+    plate: str
+    permit_number: int
+    permit_kind: Permits
+    make: str
+    model: str
+    color: str
+
+    def to_dict(self) -> VehicleDict:
+        return asdict(self)
+
+    @staticmethod
+    def from_dict(d: VehicleDict) -> 'VehicleInfo':
+        return VehicleInfo(
+            plate=str(d["plate"]),
+            permit_number=int(d["permit_number"]),
+            permit_kind=Permits(d["permit_kind"]),
+            make=str(d["make"]),
+            model=str(d["model"]),
+            color=str(d["color"]))
+
+
+VehicleDict = dict[str, VehicleInfo]
+
+
+class VehicleDB(Protocol):
+    def find_vehicle_by_plate(self, license_plate: str) -> VehicleInfo | None:
+        ...
+
+
+class JSONVehicleDB:
+
+    @staticmethod
+    def from_json(objects: list[VehicleDict] | dict[str, VehicleDict]) -> VehicleDict:
+        """
+        Convert a list of dicts or a dict of dicts to a dict of VehicleInfo.
+        """
+        if isinstance(objects, list):
+            return {v.plate: v for v in map(VehicleInfo.from_dict, objects)}
+        elif isinstance(objects, dict):
+            return {k: VehicleInfo.from_dict(v) for k, v in objects.items()}
+        else:
+            raise ValueError("objects is not a list or dict")
+
+    def __init__(self, data: VehicleDict) -> None:
+        self.data: VehicleDict = data
+
+    def find_vehicle_by_plate(self, license_plate: str) -> VehicleInfo | None:
+        return self.data.get(license_plate, None)
+
+# csv is way easier
+
+
+class CSVVehicleDB:
+    def __init__(self, csv_content: Iterable[str]) -> None:
+        """
+        Create a VehicleDB from CSV contents as a list of strings.
+
+        example:
+        ```
+        with open("vehicles.csv") as file:
+            db = CSVVehicleDB(file.readlines())
+        ```
+        """
+        self.data: VehicleDict = {}
+        r = csv.DictReader(csv_content)
+        for row in r:
+            v = VehicleInfo.from_dict(row)
+            self.data[v.plate] = v
+
+    def find_vehicle_by_plate(self, license_plate: str) -> VehicleInfo | None:
+        return self.data.get(license_plate, None)
