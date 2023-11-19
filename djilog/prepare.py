@@ -18,13 +18,16 @@ https://en.wikipedia.org/wiki/International_Terrestrial_Reference_System_and_Fra
 """
 
 
-def read_log(log_filename: str, output_crs: str, input_crs: str = ITRF2008) -> gp.GeoDataFrame:
+def read_log(log_filename: str, input_crs: str = ITRF2008, output_crs: str | None = None) -> gp.GeoDataFrame:
     """
     Open the DJI log in CSV format found at `log_filename` and convert it to a
     GeoPandas GeoDataframe. `input_crs` sets the coordinate reference system of the log
     file (usually EPSG:8999) and `output_crs` is a reference system to project
     the log into, specified as an EPSG string such as `EPSG:4329`.
     """
+    if output_crs is None:
+        output_crs = input_crs
+
     # geopandas is making everything an object type instead of int, float, etc.
     # not sure why, but opening the file in pandas first, then converting to geodataframe
     # fixes it, and gives and chance to set geospatial stuff.
@@ -42,10 +45,10 @@ def read_log(log_filename: str, output_crs: str, input_crs: str = ITRF2008) -> g
     return logdf
 
 
-def list_video_segments(df: gp.GeoDataFrame) -> tuple[int, int]:
+def list_video_segments(df: gp.GeoDataFrame) -> list[tuple[int, int]]:
     """
-    Get list of start and end times (milliseconds, from the "time(milliseconds)" columns) 
-    for segments when a video was being recorded.
+    Get list of start and end times (milliseconds, from the "time(milliseconds)" column) 
+    for segments when a video was being recorded (from the "isVideo" column).
     """
     times = []
     video = False
@@ -89,6 +92,6 @@ def human_readable(df: gp.GeoDataFrame) -> tuple[datetime, datetime, float]:
     last = df.iloc[-1]
     duration = (last[Cols.TIME_MS]-first[Cols.TIME_MS])/1000
     local = tz.tzlocal()
-    return (first[Cols.TIME_UTC].dt.astimezone(local),
-            last[Cols.TIME_UTC].dt.astimezone(local),
+    return (first[Cols.TIME_UTC].to_pydatetime().astimezone(local),
+            last[Cols.TIME_UTC].to_pydatetime().astimezone(local),
             duration)
