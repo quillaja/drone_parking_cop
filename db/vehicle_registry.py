@@ -12,11 +12,13 @@ VehicleDict = dict[str, str | int]
 @dataclass
 class VehicleInfo:
     plate: str
+    state: str
     permit_number: int
     permit_kind: Permits
     make: str
-    model: str
     color: str
+    is_ev: str  # nerfed thanks to python's stupid bools
+    note: str
 
     def to_dict(self) -> VehicleDict:
         return asdict(self)
@@ -25,11 +27,13 @@ class VehicleInfo:
     def from_dict(d: VehicleDict) -> 'VehicleInfo':
         return VehicleInfo(
             plate=str(d["plate"]),
+            state=str(d["state"]),
             permit_number=int(d["permit_number"]),
             permit_kind=Permits(d["permit_kind"]),
             make=str(d["make"]),
-            model=str(d["model"]),
-            color=str(d["color"]))
+            color=str(d["color"]),
+            is_ev=str(d["is_ev"]),
+            note=str(d["note"]))
 
 
 VehicleDict = dict[str, VehicleInfo]

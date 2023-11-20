@@ -3,7 +3,7 @@ from enum import StrEnum
 
 class Permits(StrEnum):
     staff = "staff"
-    handicapt = "handicapt"
+    handicap = "handicap"
     motorcycle = "motorcycle"
     ev = "ev"
     service = "service"
