@@ -1,10 +1,8 @@
-from dataclasses import dataclass
-from typing import Callable, NamedTuple, Protocol
+from typing import NamedTuple, Protocol
 
 import cv2
 import easyocr
 import numpy as np
-from sympy import det
 from ultralytics import YOLO
 
 from frame.box import Box
@@ -23,7 +21,10 @@ class TextRecognition(NamedTuple):
 
 
 class Detector(Protocol):
+    """A Detector finds objects within an image or video frame."""
+
     def find(self, frame: cv2.Mat) -> list[ObjectDetection]:
+        """Find objects in frame."""
         ...
 
 
@@ -59,12 +60,19 @@ class YoloSortDetector:
 
 
 def crop(frame: cv2.Mat, box: Box) -> cv2.Mat:
+    """Crop frame to the box size."""
     xmin, xmax, ymin, ymax = box.sides
-    return frame[ymin:ymax, xmin:xmax]
+    return frame[int(ymin):int(ymax), int(xmin):int(xmax)]
 
 
 class Reader(Protocol):
+    """
+    A Reader extracts text strings from an image or video frame
+    based on the detected objects.
+    """
+
     def read(self, frame: cv2.Mat, detections: list[ObjectDetection]) -> list[TextRecognition]:
+        """Read text from frame found within the list of object detections."""
         ...
 
 
@@ -100,6 +108,9 @@ class EasyOCRReader:
 
 
 class Plate(NamedTuple):
+    """
+    A license plate found and read from a video frame.
+    """
     track_id: int
     frame: int
     text: str
@@ -108,11 +119,15 @@ class Plate(NamedTuple):
 
 
 class Processor:
+    """
+    A Processor extracts and manages data from sequential video frames.
+    """
+
     def __init__(self, detector: Detector, reader: Reader) -> None:
         self.detector = detector
         self.reader = reader
         self.results_by_frame: list[list[Plate]] = []
-        self.max_confidence: dict[int, Plate] = []
+        self.max_confidence: dict[int, Plate] = {}
 
     def process(self, frame: cv2.Mat):
         """called once per frame"""
@@ -132,9 +147,12 @@ class Processor:
             for d, p in zip(detections, plate_texts)]
 
         self.results_by_frame.append(plates)
-        self._update_max()
+        self._update_max(frame_number)
 
     def _update_max(self, frame_number: int):
+        """
+        Updates the max_confidence dict using plates in `frame_number`.
+        """
         for p in self.results_by_frame[frame_number]:
             id = p.track_id
             prev_plate = self.max_confidence.setdefault(id, p)
