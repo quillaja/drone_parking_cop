@@ -11,6 +11,7 @@ VehicleJSON = dict[str, str | int]
 
 @dataclass
 class VehicleInfo:
+    """Vehicle information."""
     plate: str
     state: str
     permit_number: int
@@ -40,7 +41,15 @@ VehicleDict = dict[str, VehicleInfo]
 
 
 class VehicleDB(Protocol):
+    """
+    A data storage for vehicles that have been issued a parking permit.
+    """
+
     def find_vehicle_by_plate(self, license_plate: str) -> VehicleInfo | None:
+        """
+        Get vehicle information by the license plate number. Returns None
+        if no vehicle with that plate was found.
+        """
         ...
 
 
@@ -62,6 +71,7 @@ class JSONVehicleDB:
         self.data: VehicleDict = data
 
     def find_vehicle_by_plate(self, license_plate: str) -> VehicleInfo | None:
+        license_plate = license_plate.replace(" ", "")
         return self.data.get(license_plate, None)
 
 # csv is way easier
@@ -85,4 +95,5 @@ class CSVVehicleDB:
             self.data[v.plate] = v
 
     def find_vehicle_by_plate(self, license_plate: str) -> VehicleInfo | None:
+        license_plate = license_plate.replace(" ", "")
         return self.data.get(license_plate, None)

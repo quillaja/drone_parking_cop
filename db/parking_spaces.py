@@ -9,6 +9,7 @@ from .permit import Permits
 
 @dataclass
 class SpaceInfo:
+    """Parking space information."""
     id: int
     lot: int
     required_permit: Permits
@@ -17,7 +18,16 @@ class SpaceInfo:
 
 
 class ParkingSpaceDB(Protocol):
+    """
+    A data storage for parking spaces that allows a space's information
+    to be retrieved by a geographic location.
+    """
+
     def find_space_by_location(self, loc: shapely.Point) -> SpaceInfo | None:
+        """
+        Get space info by geographic location. Returns None when
+        no space is at that location.
+        """
         ...
 
 
@@ -39,7 +49,6 @@ class GeoPackageSpaceDB:
             return None
 
         return SpaceInfo(
-            id=0,  # result[GeoPackageSpaceDB.ID_COL],
-            lot=result[GeoPackageSpaceDB.TYPE_COL],
-            kind=result[GeoPackageSpaceDB.TYPE_COL],
-        )
+            id=result[GeoPackageSpaceDB.ID_COL],
+            lot=result[GeoPackageSpaceDB.LOT_COL],
+            required_permit=result[GeoPackageSpaceDB.TYPE_COL])
