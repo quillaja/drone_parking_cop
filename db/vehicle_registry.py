@@ -1,10 +1,10 @@
 import csv
 from dataclasses import asdict, dataclass
-from typing import Iterable, Protocol, Self
+from typing import Iterable, Protocol
 
 from .permit import Permits
 
-VehicleDict = dict[str, str | int]
+VehicleJSON = dict[str, str | int]
 
 # this got way too complex for such a simple thing
 
@@ -20,11 +20,11 @@ class VehicleInfo:
     is_ev: str  # nerfed thanks to python's stupid bools
     note: str
 
-    def to_dict(self) -> VehicleDict:
+    def to_dict(self) -> VehicleJSON:
         return asdict(self)
 
     @staticmethod
-    def from_dict(d: VehicleDict) -> 'VehicleInfo':
+    def from_dict(d: VehicleJSON) -> 'VehicleInfo':
         return VehicleInfo(
             plate=str(d["plate"]),
             state=str(d["state"]),
@@ -47,7 +47,7 @@ class VehicleDB(Protocol):
 class JSONVehicleDB:
 
     @staticmethod
-    def from_json(objects: list[VehicleDict] | dict[str, VehicleDict]) -> VehicleDict:
+    def from_json(objects: list[VehicleJSON] | dict[str, VehicleJSON]) -> VehicleDict:
         """
         Convert a list of dicts or a dict of dicts to a dict of VehicleInfo.
         """
