@@ -65,11 +65,11 @@ class Box:
     def scale(self, *s: float):
         """scale by s. Returns new object."""
         if len(s) == 1:
-            return Box([self.topleft[0]*s, self.topleft[1]*s],
-                       [self.bottomright[0]*s, self.bottomright[1]*s])
-        elif len(s) >= 2:
             return Box([self.topleft[0]*s[0], self.topleft[1]*s[0]],
-                       [self.bottomright[0]*s[1], self.bottomright[1]*s[1]])
+                       [self.bottomright[0]*s[0], self.bottomright[1]*s[0]])
+        elif len(s) >= 2:
+            return Box([self.topleft[0]*s[0], self.topleft[1]*s[1]],
+                       [self.bottomright[0]*s[0], self.bottomright[1]*s[1]])
 
     def draw(self, img: cv2.Mat, box_color: tuple[int, int, int] = (0, 255, 0)):
         """draw result overlayed on image. this modifies the image."""

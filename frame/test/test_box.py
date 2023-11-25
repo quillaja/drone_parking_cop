@@ -1,3 +1,5 @@
+import pytest
+
 from frame.box import Box
 
 square = Box([0, 0], [1, 1])
@@ -39,3 +41,29 @@ def test_aspect():
     assert square.aspect == 1
     assert hrect.aspect == 2/1
     assert vrect.aspect == 1/2
+
+
+def test_sides():
+    assert square.sides == [0, 1, 0, 1]
+    assert hrect.sides == [0, 2, 0, 1]
+    assert vrect.sides == [0, 1, 0, 2]
+
+
+def test_center():
+    assert square.center == [0.5, 0.5]
+    assert hrect.center == [1, 0.5]
+    assert vrect.center == [0.5, 1]
+
+
+def test_translate():
+    assert square.translate(1, 1) == Box([1, 1], [2, 2])
+    assert hrect.translate(1, 1) == Box([1, 1], [3, 2])
+    assert vrect.translate(1, 1) == Box([1, 1], [2, 3])
+
+
+def test_scale():
+    assert square.scale(2) == Box([0, 0], [2, 2])
+    assert square.scale(2, 2) == Box([0, 0], [2, 2])
+    assert square.scale(2, 2, 2) == Box([0, 0], [2, 2])
+    assert square.scale(2, 1) == hrect
+    assert square.scale(1, 2) == vrect
