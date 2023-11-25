@@ -16,9 +16,14 @@ class Box:
     #     return Detection(top_left, bottom_right)
 
     @staticmethod
-    def from_point_size(top_left: list[float], dx: float, dy: float) -> 'Box':
+    def from_point_size(topleft: list[float], dx: float, dy: float) -> 'Box':
         """Make a Detection using one corner of a box and the box's width and height."""
-        return Box(top_left, [top_left[0]+dx, top_left[1]+dy])
+        return Box(topleft, [topleft[0]+dx, topleft[1]+dy])
+
+    @property
+    def sides(self) -> list[float]:
+        """Get sides of box as [xmin, xmax, ymin, ymax]. """
+        return [self.topleft[0], self.bottomright[0], self.topleft[1], self.bottomright[1]]
 
     @property
     def topright(self) -> list[float]:
@@ -45,11 +50,26 @@ class Box:
         """width/height"""
         return self.width/self.height
 
+    @property
+    def center(self) -> list[float]:
+        """center coord of box"""
+        xmin, xmax, ymin, ymax = self.sides
+        return [(xmin+xmax)/2, (ymin+ymax)/2]
+
     def translate(self, dx: int, dy: int) -> 'Box':
         """translate. Returns new object."""
         tl = [self.topleft[0]+dx, self.topleft[1]+dy]
         br = [self.bottomright[0]+dx, self.bottomright[1]+dy]
         return Box(tl, br)
+
+    def scale(self, *s: float):
+        """scale by s. Returns new object."""
+        if len(s) == 1:
+            return Box([self.topleft[0]*s, self.topleft[1]*s],
+                       [self.bottomright[0]*s, self.bottomright[1]*s])
+        elif len(s) >= 2:
+            return Box([self.topleft[0]*s[0], self.topleft[1]*s[0]],
+                       [self.bottomright[0]*s[1], self.bottomright[1]*s[1]])
 
     def draw(self, img: cv2.Mat, box_color: tuple[int, int, int] = (0, 255, 0)):
         """draw result overlayed on image. this modifies the image."""
