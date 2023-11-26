@@ -1,9 +1,16 @@
+from enum import StrEnum
+
 import geopandas as gp
 import shapely
 
 from djilog.column_names import Cols
 
 from .augment import drone_targets, ground_elevation
+
+
+class DronePosition(StrEnum):
+    position = "geometry"
+    target = "target"
 
 
 class FlightLog:
@@ -24,20 +31,20 @@ class FlightLog:
         self.df[Cols.TIME_MS] = self.df[Cols.TIME_MS] - self._start_ms
         self.df = self.df.set_index(Cols.TIME_MS)
 
-    def drone_target(self, time_ms: float) -> shapely.Point:
+    def drone_info(self, time_ms: float, info: DronePosition) -> shapely.Point:
         """
-        Given a time in milliseconds, get the point at which the drone's
-        camera is targeting. If the time falls between log entries, the 
-        target point is linearly interpolated. Thus, this is a valid operation
-        only for projected coordinate systems.
+        Given a time in milliseconds, get position information about the drone. If 
+        the time falls between log entries, the target point is linearly 
+        interpolated. Thus, this is a valid operation only for 
+        projected coordinate systems.
         """
         # dji logs are recorded at 200ms intervals. They don't always start at
         # 0ms, but since I shifted them in the constructor, they do.
         lower = int(time_ms/200) * 200
         upper = int(time_ms/200 + 1) * 200
         t = (time_ms - lower)/(upper-lower)
-        pt1: shapely.Point = self.df.loc[lower, "geometry"]
-        pt2: shapely.Point = self.df.loc[upper, "geometry"]
+        pt1: shapely.Point = self.df.loc[lower, info]
+        pt2: shapely.Point = self.df.loc[upper, info]
         x = pt1.x*(1-t) + pt2.x*t
         y = pt1.y*(1-t) + pt2.y*t
         return shapely.Point(x, y)
