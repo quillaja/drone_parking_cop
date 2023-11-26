@@ -29,6 +29,8 @@ class Detector(Protocol):
 
 
 class YoloSortDetector:
+    """Use YOLO for detection and https://github.com/abewley/sort for tracking."""
+
     def __init__(self, detector: YOLO, tracker: Sort) -> None:
         self.detector = detector
         self.tracker = tracker
@@ -52,6 +54,32 @@ class YoloSortDetector:
         # convert tracking results
         detected_plates: list[ObjectDetection] = []
         for obj in track_ids:
+            bb = Box([obj[0], obj[1]], [obj[2], obj[3]])
+            id = int(obj[4])
+            detected_plates.append(ObjectDetection(track_id=id, box=bb))
+
+        return detected_plates
+
+
+class YoloOnlyDetector:
+    """Use YOLO for both tracking and detection."""
+
+    def __init__(self, detector: YOLO) -> None:
+        self.detector = detector
+
+    def find(self, frame: cv2.Mat) -> list[ObjectDetection]:
+        # YOLO model returns a list because it can take a list as the source
+        # param. Thus [0], to get the first result of a len-1 list.
+        # https://docs.ultralytics.com/modes/predict/#working-with-results
+        # for tracking, see
+        # https://docs.ultralytics.com/modes/track/#persisting-tracks-loop
+        objects = self.detector.track(frame, persist=True, verbose=False)[0]
+        # convert yolo output to something i can use. this will be a list of:
+        # [xmin, ymin, xmax, ymax, track_id, confidence, class_id]
+        objects = objects.boxes.data.tolist()
+        # convert results
+        detected_plates: list[ObjectDetection] = []
+        for obj in objects:
             bb = Box([obj[0], obj[1]], [obj[2], obj[3]])
             id = int(obj[4])
             detected_plates.append(ObjectDetection(track_id=id, box=bb))
