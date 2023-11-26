@@ -49,6 +49,6 @@ class GeoPackageSpaceDB:
             return None
 
         return SpaceInfo(
-            id=result[GeoPackageSpaceDB.ID_COL],
-            lot=result[GeoPackageSpaceDB.LOT_COL],
-            required_permit=result[GeoPackageSpaceDB.TYPE_COL])
+            id=int(result.loc[0, GeoPackageSpaceDB.ID_COL]),
+            lot=int(result.loc[0, GeoPackageSpaceDB.LOT_COL]),
+            required_permit=str(result.loc[0, GeoPackageSpaceDB.TYPE_COL]))
