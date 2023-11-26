@@ -31,7 +31,7 @@ class FlightLog:
         self.df[Cols.TIME_MS] = self.df[Cols.TIME_MS] - self._start_ms
         self.df = self.df.set_index(Cols.TIME_MS)
 
-    def drone_info(self, time_ms: float, info: DronePosition) -> shapely.Point:
+    def drone_info(self, time_ms: float, info: DronePosition) -> shapely.Point | None:
         """
         Given a time in milliseconds, get position information about the drone. If 
         the time falls between log entries, the target point is linearly 
@@ -43,8 +43,13 @@ class FlightLog:
         lower = int(time_ms/200) * 200
         upper = int(time_ms/200 + 1) * 200
         t = (time_ms - lower)/(upper-lower)
-        pt1: shapely.Point = self.df.loc[lower, info]
-        pt2: shapely.Point = self.df.loc[upper, info]
+        try:
+            # it seems that some log entries weren't written, so occasionally
+            # a particular query fails
+            pt1: shapely.Point = self.df.loc[lower, info]
+            pt2: shapely.Point = self.df.loc[upper, info]
+        except KeyError:
+            return None
         x = pt1.x*(1-t) + pt2.x*t
         y = pt1.y*(1-t) + pt2.y*t
         return shapely.Point(x, y)

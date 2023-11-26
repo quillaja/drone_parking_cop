@@ -40,6 +40,8 @@ class GeoPackageSpaceDB:
         self.spaces = gp.read_file(gpkg_filename, layer=table)
 
     def find_space_by_location(self, loc: shapely.Point) -> SpaceInfo | None:
+        if loc is None:
+            return None
         # the loc needs to be in a geodataframe to work with gp.overlay()
         # also assume the given point is in the same CRS as spaces
         pt = gp.GeoDataFrame(geometry=[loc], crs=self.spaces.crs)
