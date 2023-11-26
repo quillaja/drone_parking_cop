@@ -71,15 +71,26 @@ class Box:
             return Box([self.topleft[0]*s[0], self.topleft[1]*s[1]],
                        [self.bottomright[0]*s[0], self.bottomright[1]*s[1]])
 
+    def as_int(self) -> tuple[tuple[int], tuple[int]]:
+        xmin, xmax, ymin, ymax = self.sides
+        return ((int(xmin), int(ymin)), (int(xmax), int(ymax)))
+
+    @property
+    def is_empty(self) -> bool:
+        w = int(self.width)
+        h = int(self.height)
+        return w <= 0 or h <= 0
+
     def draw(self, img: cv2.Mat, box_color: tuple[int, int, int] = (0, 255, 0)):
         """draw result overlayed on image. this modifies the image."""
         BOX_COLOR = box_color
         TEXT_COLOR = (0, 0, 0)
         TEXT_FONT = cv2.FONT_HERSHEY_DUPLEX
 
+        pt_min, pt_max = self.as_int()
         # draw box
-        img = cv2.rectangle(img=img, pt1=self.topleft, pt2=self.bottomright,
-                            color=BOX_COLOR, thickness=1)
+        img = cv2.rectangle(img=img, pt1=pt_min, pt2=pt_max,
+                            color=BOX_COLOR, thickness=2)
         # # draw ocr text
         # tsize, _ = cv2.getTextSize(text=self.text, fontFace=TEXT_FONT,
         #                            fontScale=1, thickness=1)
