@@ -32,8 +32,8 @@ def read_log(log_filename: str, input_crs: str = ITRF2008, output_crs: str | Non
     # not sure why, but opening the file in pandas first, then converting to geodataframe
     # fixes it, and gives and chance to set geospatial stuff.
     raw_data = pd.read_csv(log_filename)
-    # raw_data = raw_data.drop(labels=["height_above_ground_at_drone_location(feet)",
-    #                                  "ground_elevation_at_drone_location(feet)"], axis="columns")
+    # cause some headers have random extra spaces...
+    raw_data.columns = [c.strip() for c in raw_data.columns]
     logdf = gp.GeoDataFrame(data=raw_data,
                             geometry=gp.points_from_xy(
                                 x=raw_data[Cols.LONGITUDE],
