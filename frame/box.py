@@ -62,7 +62,7 @@ class Box:
         br = [self.bottomright[0]+dx, self.bottomright[1]+dy]
         return Box(tl, br)
 
-    def scale(self, *s: float):
+    def scale(self, *s: float) -> 'Box':
         """scale by s. Returns new object."""
         if len(s) == 1:
             return Box([self.topleft[0]*s[0], self.topleft[1]*s[0]],
@@ -71,22 +71,39 @@ class Box:
             return Box([self.topleft[0]*s[0], self.topleft[1]*s[1]],
                        [self.bottomright[0]*s[0], self.bottomright[1]*s[1]])
 
+    def scale_center(self, *s: float) -> 'Box':
+        """scale by s from box's center"""
+        cx, cy = self.center
+        return self.translate(-cx, -cy).scale(*s).translate(cx, cy)
+
     def as_int(self) -> tuple[tuple[int], tuple[int]]:
+        """get top left and bottom right corners as integers"""
         xmin, xmax, ymin, ymax = self.sides
         return ((int(xmin), int(ymin)), (int(xmax), int(ymax)))
 
     @property
     def is_empty(self) -> bool:
+        """True if wither width or height is <= 0"""
         w = int(self.width)
         h = int(self.height)
         return w <= 0 or h <= 0
 
+    def contains(self, x: float, y: float,
+                 x_margin: float = 0, y_margin: float = 0) -> bool:
+        """
+        True if box contains (x,y). The optional margins adjust the box
+        sides relative to the box center.
+        """
+        xmin, xmax, ymin, ymax = self.sides
+        return ((xmin-x_margin <= x and x <= xmax+x_margin)
+                and (ymin-y_margin <= y and y <= ymax+y_margin))
+
 
 def draw(img: cv2.Mat, box: Box,
          upper_text: str = "", lower_text: str = "",
-         box_color: tuple[int, int, int] = (0, 255, 0)):
+         color: tuple[int, int, int] = (0, 255, 0)):
     """draw box overlayed on image. this modifies the image."""
-    BOX_COLOR = box_color
+    BOX_COLOR = color
     TEXT_COLOR = (0, 0, 0)
     TEXT_FONT = cv2.FONT_HERSHEY_DUPLEX
 
