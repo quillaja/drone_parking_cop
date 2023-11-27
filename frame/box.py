@@ -81,34 +81,40 @@ class Box:
         h = int(self.height)
         return w <= 0 or h <= 0
 
-    def draw(self, img: cv2.Mat, box_color: tuple[int, int, int] = (0, 255, 0)):
-        """draw result overlayed on image. this modifies the image."""
-        BOX_COLOR = box_color
-        TEXT_COLOR = (0, 0, 0)
-        TEXT_FONT = cv2.FONT_HERSHEY_DUPLEX
 
-        pt_min, pt_max = self.as_int()
-        # draw box
-        img = cv2.rectangle(img=img, pt1=pt_min, pt2=pt_max,
-                            color=BOX_COLOR, thickness=2)
-        # # draw ocr text
-        # tsize, _ = cv2.getTextSize(text=self.text, fontFace=TEXT_FONT,
-        #                            fontScale=1, thickness=1)
-        # img = cv2.rectangle(img=img, pt1=self.box[0],
-        #                     pt2=(self.box[0][0]+tsize[0], self.box[0][1]-tsize[1]),
-        #                     color=BOX_COLOR, thickness=-1)
-        # img = cv2.putText(img=img, text=self.text,
-        #                   org=self.box[0],
-        #                   fontFace=TEXT_FONT,
-        #                   fontScale=1, color=TEXT_COLOR, thickness=1)
-        # # draw confidence level
-        # confidence = f"{self.confidence:0.2f}"
-        # tsize, _ = cv2.getTextSize(text=confidence, fontFace=TEXT_FONT,
-        #                            fontScale=1, thickness=1)
-        # img = cv2.rectangle(img=img, pt1=self.box[3],
-        #                     pt2=(self.box[3][0]+tsize[0], self.box[3][1]+tsize[1]),
-        #                     color=BOX_COLOR, thickness=-1)
-        # img = cv2.putText(img=img, text=confidence,
-        #                   org=(self.box[3][0], self.box[3][1]+tsize[1]),
-        #                   fontFace=TEXT_FONT,
-        #                   fontScale=1, color=TEXT_COLOR, thickness=1)
+def draw(img: cv2.Mat, box: Box,
+         upper_text: str = "", lower_text: str = "",
+         box_color: tuple[int, int, int] = (0, 255, 0)):
+    """draw box overlayed on image. this modifies the image."""
+    BOX_COLOR = box_color
+    TEXT_COLOR = (0, 0, 0)
+    TEXT_FONT = cv2.FONT_HERSHEY_DUPLEX
+
+    pt_min, pt_max = box.as_int()
+    # draw box
+    img = cv2.rectangle(img=img, pt1=pt_min, pt2=pt_max,
+                        color=BOX_COLOR, thickness=2)
+
+    # draw upper text
+    if upper_text:
+        tsize, _ = cv2.getTextSize(text=upper_text, fontFace=TEXT_FONT,
+                                   fontScale=1, thickness=1)
+        img = cv2.rectangle(img=img, pt1=pt_min,
+                            pt2=(pt_min[0]+tsize[0], pt_min[1]-tsize[1]),
+                            color=BOX_COLOR, thickness=-1)
+        img = cv2.putText(img=img, text=upper_text,
+                          org=pt_min,
+                          fontFace=TEXT_FONT,
+                          fontScale=1, color=TEXT_COLOR, thickness=1)
+
+    # # draw lower text
+    if lower_text:
+        tsize, _ = cv2.getTextSize(text=lower_text, fontFace=TEXT_FONT,
+                                   fontScale=1, thickness=1)
+        img = cv2.rectangle(img=img, pt1=(pt_min[0], pt_max[1]),
+                            pt2=(pt_min[0]+tsize[0], pt_max[1]+tsize[1]),
+                            color=BOX_COLOR, thickness=-1)
+        img = cv2.putText(img=img, text=lower_text,
+                          org=(pt_min[0], pt_max[1]+tsize[1]),
+                          fontFace=TEXT_FONT,
+                          fontScale=1, color=TEXT_COLOR, thickness=1)
