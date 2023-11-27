@@ -1,4 +1,5 @@
-from typing import NamedTuple, Protocol
+import re
+from typing import Callable, NamedTuple, Protocol
 
 import cv2
 import easyocr
@@ -126,7 +127,8 @@ class EasyOCRReader:
                                        batch_size=16)
             # convert results
             for box, text, conf in result:
-                text: str = text.replace(" ", "")
+                # remove spaces and hypens which are allowed in ALPHABET
+                text: str = text.replace(" ", "").replace("-", "")
                 plate_texts.append(TextRecognition(
                     track_id=d.track_id,
                     confidence=conf,
@@ -146,16 +148,34 @@ class Plate(NamedTuple):
     box: Box
 
 
+PlateValidator = Callable[[Plate, Plate], bool]
+"""
+A function that determines whether or not too keep a new Plate vs and old one.
+PlateValidator(old, new) -> bool
+"""
+
+PLATE_NUMBER = re.compile(r"[A-Z0-9]{4,7}")
+"""regexp to id a variety of plates"""
+
+
+def default_validator(old: Plate, new: Plate) -> bool:
+    """Keep new if text is 4-7 alphanumeric and new confidence > old confidence."""
+    if not PLATE_NUMBER.match(new.text):
+        return False
+    return new.confidence > old.confidence
+
+
 class Processor:
     """
     A Processor extracts and manages data from sequential video frames.
     """
 
-    def __init__(self, detector: Detector, reader: Reader) -> None:
+    def __init__(self, detector: Detector, reader: Reader, validator: PlateValidator = default_validator) -> None:
         self.detector = detector
         self.reader = reader
         self.results_by_frame: list[list[Plate]] = []
         self.max_confidence: dict[int, Plate] = {}
+        self.validator: PlateValidator = validator
 
     def process(self, frame: cv2.Mat):
         """called once per frame"""
@@ -164,7 +184,6 @@ class Processor:
         detections = self.detector.find(frame)
         plate_texts = self.reader.read(frame, detections)
 
-        # TODO: filter by regex?
         plates = [
             Plate(
                 track_id=p.track_id,
@@ -175,14 +194,14 @@ class Processor:
             for d, p in zip(detections, plate_texts)]
 
         self.results_by_frame.append(plates)
-        self._update_max(frame_number)
+        # self.update_max(frame_number)
 
-    def _update_max(self, frame_number: int):
+    def update_max(self, frame_number: int):
         """
         Updates the max_confidence dict using plates in `frame_number`.
         """
         for p in self.results_by_frame[frame_number]:
             id = p.track_id
             prev_plate = self.max_confidence.setdefault(id, p)
-            if p.confidence > prev_plate.confidence:
+            if self.validator(prev_plate, p):
                 self.max_confidence[id] = p
