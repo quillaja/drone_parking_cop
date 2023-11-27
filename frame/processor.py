@@ -126,13 +126,19 @@ class EasyOCRReader:
                                        # workers=2, # doesn't like workers
                                        batch_size=16)
             # convert results
-            for box, text, conf in result:
+            if len(result) > 0:
+                box, text, conf = result[0]
                 # remove spaces and hypens which are allowed in ALPHABET
                 text: str = text.replace(" ", "").replace("-", "")
                 plate_texts.append(TextRecognition(
                     track_id=d.track_id,
                     confidence=conf,
                     text=text))
+            else:
+                plate_texts.append(TextRecognition(
+                    track_id=d.track_id,
+                    confidence=0,
+                    text="HI MOM"))
 
         return plate_texts
 
