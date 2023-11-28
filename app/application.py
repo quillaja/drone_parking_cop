@@ -144,13 +144,14 @@ class Application:
             has_frame, frame = self.video.read()
             # if frame is read correctly has_frame is True
             if not has_frame:
-                print(" Can't receive frame (stream end?). Exiting ...")
+                print(" No more frames. Exiting ...")
                 break
 
             # get drone info from log and parking space info from parking db
-            frame_time_ms = frame_to_ms(frame_number, 30)
+            frame_time_ms = frame_to_ms(frame_number, vm.fps)
             drone_info = self.log.drone_info(frame_time_ms)
-            space_info = self.parking.find_space_by_location(drone_info.target_position)
+            if drone_info:
+                space_info = self.parking.find_space_by_location(drone_info.target_position)
 
             frame_cropped = fr.crop(frame, cropbox)  # use cropped frame for actual detections
             self.processor.process(frame_cropped)
@@ -176,18 +177,23 @@ class Application:
             if space_info:
                 draw_text(frame, f"Parking space: {space_info.id} {space_info.required_permit}", 12)
 
-            for p in self.processor.results_by_frame[frame_number]:
+            # sort detected objs by bb ymin so they are drawn "back to front"
+            zsorted = sorted(self.processor.results_by_frame[frame_number],
+                             key=lambda p: p.boxes[0].topleft[1])
+            for p in zsorted:
                 # move p.box from position in cropped frame to full frame
                 bbs = [b.translate(*cropbox.topleft) for b in p.boxes]
+                for bb in bbs:
+                    fr.draw(frame, bb, color=(255, 255, 0))  # cyan
                 outer_bb = bbs[0]
                 mc = self.processor.max_confidence[p.track_id]
                 if outer_bb.contains(*vidbox.center):
                     reg = self.vehicles.find_vehicle_by_plate(mc.text)
-                    t = "None"
-                    b = "None"
+                    t = f"{mc.track_id}:{mc.text} {mc.confidence:0.2f}"
+                    b = ""
                     color = (255, 0, 0)  # blue
                     if space_info:
-                        t = f"{mc.text}:{space_info.id}:{space_info.required_permit}"
+                        t += f" |{space_info.id}:{space_info.required_permit}"
                     if reg:
                         b = f"{reg.color} {reg.make}:{reg.permit_kind}"
                     if reg and space_info:
@@ -198,9 +204,9 @@ class Application:
                     fr.draw(frame, outer_bb, t, b, color)
                 else:
                     fr.draw(frame, outer_bb,
-                            f"{mc.track_id}:{mc.text}",
-                            f"{mc.confidence:0.2f}",
-                            (255, 255, 255))
+                            f"{mc.track_id}:{mc.text} {mc.confidence:0.2f}",
+                            "",
+                            (255, 255, 255))  # white
 
             showframe = cv2.resize(frame, dsize=(0, 0), fx=0.5, fy=0.5)  # resize huge 4K video
             cv2.imshow('frame', showframe)
