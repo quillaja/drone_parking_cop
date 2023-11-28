@@ -196,13 +196,22 @@ class EasyOCRReader:
             # get a crop of the frame containing just the plate
             # assumes that the last/inner-most box is the thing to read
             plate_box = d.boxes[-1]
+            # TODO: think
+            # this check helps but will break the reader if an entire vehicle
+            # is passed in to be read since the vehicle bb aspec < 1 usually
+            if plate_box.aspect < 1.5:
+                plate_texts.append(TextRecognition(
+                    track_id=d.track_id,
+                    confidence=0,
+                    text="HI MOM"))
+                continue
             plate_crop = crop(frame, plate_box)
             # do OCR
             # i'm not sure how much width_ths and batch_size improve
             # results or performance
             result = self.ocr.readtext(image=plate_crop,
                                        allowlist=EasyOCRReader.ALPHABET,
-                                       width_ths=1.5,
+                                       width_ths=10,  # makes horizontal boxes merge
                                        # workers=2, # doesn't like workers
                                        batch_size=16)
             # convert results
