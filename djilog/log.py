@@ -1,4 +1,4 @@
-from enum import StrEnum
+from typing import NamedTuple
 
 import geopandas as gp
 import shapely
@@ -8,14 +8,20 @@ from djilog.column_names import Cols
 from .augment import drone_targets, ground_elevation
 
 
-class DronePosition(StrEnum):
-    position = "geometry"
-    target = "target"
+class DroneInfo(NamedTuple):
+    time_ms: float
+    drone_alt_ft: float
+    ground_alt_ft: float
+    heading: float
+    gimbal_pitch: float
+    drone_position: shapely.Point
+    target_position: shapely.Point
 
 
 class FlightLog:
     GROUND_COL = "ground"
     TARGET_COL = "target"
+    DRONE_LOC_COL = "geometry"
 
     def __init__(self, log_segment: gp.GeoDataFrame, ground_dem_filename: str,
                  ground_fudge_factor: float = 2.5) -> None:
@@ -33,9 +39,9 @@ class FlightLog:
         self.df[Cols.TIME_MS] = self.df[Cols.TIME_MS] - self._start_ms
         self.df = self.df.set_index(Cols.TIME_MS)
 
-    def drone_info(self, time_ms: float, info: DronePosition) -> shapely.Point | None:
+    def drone_info(self, time_ms: float) -> DroneInfo | None:
         """
-        Given a time in milliseconds, get position information about the drone. If 
+        Given a time in milliseconds, get information about the drone. If 
         the time falls between log entries, the target point is linearly 
         interpolated. Thus, this is a valid operation only for 
         projected coordinate systems.
@@ -46,13 +52,36 @@ class FlightLog:
         lower = int(time_ms/INTERVAL) * INTERVAL
         upper = int(time_ms/INTERVAL + 1) * INTERVAL
         t = (time_ms - lower)/(upper-lower)
+
         try:
             # it seems that some log entries weren't written, so occasionally
             # a particular query fails
-            pt1: shapely.Point = self.df.loc[lower, info]
-            pt2: shapely.Point = self.df.loc[upper, info]
+            infos = [
+                DroneInfo(
+                    time_ms=float(ms),
+                    drone_alt_ft=self.df.loc[ms, Cols.ALTITUDE],
+                    ground_alt_ft=self.df.loc[ms, FlightLog.GROUND_COL],
+                    heading=self.df.loc[ms, Cols.HEADING],
+                    gimbal_pitch=self.df.loc[ms, Cols.PITCH],
+                    drone_position=self.df.loc[ms, FlightLog.DRONE_LOC_COL],
+                    target_position=self.df.loc[ms, FlightLog.TARGET_COL])
+                for ms in [lower, upper]]
         except KeyError:
             return None
-        x = pt1.x*(1-t) + pt2.x*t
-        y = pt1.y*(1-t) + pt2.y*t
+
+        # wow, this is getting a bit obtuse...
+        # this spreads the 2 DroneInfos, then zips their members,
+        # then lerps the members. then the new items from the generator
+        # are spread and passed to DroneInfo constructor
+        return DroneInfo(*(lerp(l, u, t) for l, u in zip(*infos)))
+
+
+def lerp(a: float | shapely.Point, b: float | shapely.Point, t: float) -> float:
+    if isinstance(a, float) and isinstance(b, float):
+        return a*(1-t) + b*t
+    elif isinstance(a, shapely.Point) and isinstance(b, shapely.Point):
+        x = a.x*(1-t) + b.x*t
+        y = a.y*(1-t) + b.y*t
         return shapely.Point(x, y)
+    else:
+        raise ValueError("both args must be float or shapely.Point")

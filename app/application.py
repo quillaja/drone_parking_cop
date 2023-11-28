@@ -83,13 +83,13 @@ class Application:
         self.video = cv2.VideoCapture(video)
         self.video_segments = djilog.segment(djilog.read_log(
             log,
-            input_crs="EPSG:4326",
+            # input_crs="EPSG:4326",
             output_crs="EPSG:6559"))
         self.log: djilog.FlightLog = None
 
         self.parking = db.GeoPackageSpaceDB(PARKING_SPACE_DATA)
         with Path(LICENSE_PLATE_DATA).open() as file:
-            self.vehicles = db.CSVVehicleDB(file.readlines())
+            self.vehicles = db.CSVVehicleDB(file.readlines(), 0.5)
 
         self.processor = fr.Processor(
             # detector=frame.YoloSortDetector(
@@ -130,8 +130,8 @@ class Application:
         """
         """
         vm = self.get_video_metrics()
-        cropbox = fr.Box([vm.width*0.1, vm.height*0.25],
-                         [vm.width*(1-0.1), vm.height*(1-0.0)])
+        cropbox = fr.Box([vm.width*0.1, vm.height*0.1],
+                         [vm.width*(1-0.1), vm.height*(1-0.05)])
         # box representing the frame
         vidbox = fr.Box([0, 0], [vm.width, vm.height])
 
@@ -147,32 +147,34 @@ class Application:
                 print(" Can't receive frame (stream end?). Exiting ...")
                 break
 
+            # get drone info from log and parking space info from parking db
             frame_time_ms = frame_to_ms(frame_number, vm.fps)
-            drone_pos = self.log.drone_info(frame_time_ms, djilog.DronePosition.position)
-            drone_target = self.log.drone_info(frame_time_ms, djilog.DronePosition.target)
-            space_info = self.parking.find_space_by_location(drone_target)
+            drone_info = self.log.drone_info(frame_time_ms)
+            space_info = self.parking.find_space_by_location(drone_info.target_position)
 
             frame_cropped = fr.crop(frame, cropbox)  # use cropped frame for actual detections
             self.processor.process(frame_cropped)
             self.processor.update_max(frame_number)
 
-            # print(f"=== frame {frame_number} of {vm.frames} = {frame_time_ms}ms ===")
-            # print(f"pos {drone_pos}\ttar {drone_target}")
-            # print(f"space: {space_info}")
-            # print()
-            # # print([(p.text, p.confidence) for p in self.processor.max_confidence.values()])
-            # # print()
-
             draw_center_lines(frame, vidbox)
             fr.draw(frame, cropbox, color=(128, 128, 128))
 
-            if drone_pos:
-                draw_text(frame, f"D: {drone_pos.x:0.2f}, {drone_pos.y:0.2f}", 0)
-            if drone_target:
-                draw_text(frame, f"T: {drone_target.x:0.2f}, {drone_target.y:0.2f}", 1)
+            draw_text(frame, f"Time: {frame_time_ms:0.2f}", 0)
+            if drone_info:
+                draw_text(frame, f"Time: {drone_info.time_ms:0.2f}", 1)
+                draw_text(frame, "Drone", 2)
+                draw_text(frame,
+                          f" L: {drone_info.drone_position.x:0.2f}, {drone_info.drone_position.y:0.2f}, {drone_info.drone_alt_ft:0.2f}",
+                          3)
+                draw_text(frame,
+                          f" T: {drone_info.target_position.x:0.2f}, {drone_info.target_position.y:0.2f}",
+                          4)
+                draw_text(frame, f" G: {drone_info.ground_alt_ft:0.2f}", 5)
+                draw_text(frame, f" H: {drone_info.heading:0.2f}", 6)
+                draw_text(frame, f" P: {drone_info.gimbal_pitch:0.2f}", 7)
             if space_info:
-                draw_text(frame, f"S: {space_info.id} {space_info.required_permit}", 2)
-            draw_text(frame, f"MC: {len(self.processor.max_confidence)}", 3)
+                draw_text(frame, f"Space: {space_info.id} {space_info.required_permit}", 8)
+            draw_text(frame, f"Objects: {len(self.processor.max_confidence)}", 9)
 
             for p in self.processor.results_by_frame[frame_number]:
                 # move p.box from position in cropped frame to full frame
@@ -181,10 +183,6 @@ class Application:
                 mc = self.processor.max_confidence[p.track_id]
                 if outer_bb.contains(*vidbox.center):
                     reg = self.vehicles.find_vehicle_by_plate(mc.text)
-                    # print(p)
-                    # print(space_info)
-                    # print(reg)
-                    # print()
                     t = "None"
                     b = "None"
                     color = (255, 0, 0)  # blue
