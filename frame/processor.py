@@ -10,9 +10,16 @@ from frame.box import Box
 from sort.sort import Sort
 
 
+def crop(frame: cv2.Mat, box: Box) -> cv2.Mat:
+    """Crop frame to the box size."""
+    xmin, xmax, ymin, ymax = box.sides
+    return frame[int(ymin):int(ymax), int(xmin):int(xmax)]
+
+
 class ObjectDetection(NamedTuple):
     track_id: int
-    box: Box
+    boxes: list[Box]
+    """Bounding boxes from outer to inner."""
 
 
 class TextRecognition(NamedTuple):
@@ -57,9 +64,27 @@ class YoloSortDetector:
         for obj in track_ids:
             bb = Box([obj[0], obj[1]], [obj[2], obj[3]])
             id = int(obj[4])
-            detected_plates.append(ObjectDetection(track_id=id, box=bb))
+            detected_plates.append(ObjectDetection(track_id=id, boxes=[bb]))
 
         return detected_plates
+
+
+def extract_by_mask(frame: cv2.Mat, mask: cv2.Mat, bbox: Box | None = None) -> cv2.Mat:
+    """
+    Use mask (8bit 1 channel binary image) to keep only the parts of frame that
+    correspond to in mask. Then, crop the frame by box.
+    """
+    w, h = frame.shape[1], frame.shape[0]
+    # make mask match frame size
+    mask = cv2.resize(mask, dsize=(w, h))
+    # perform masking operation
+    masked_frame = cv2.bitwise_and(frame, frame, mask=mask)
+
+    if bbox is None:
+        return masked_frame
+
+    # crop to box
+    return crop(masked_frame, bbox)
 
 
 class YoloOnlyDetector:
@@ -83,15 +108,64 @@ class YoloOnlyDetector:
         for obj in objects:
             bb = Box([obj[0], obj[1]], [obj[2], obj[3]])
             id = int(obj[4])
-            detected_plates.append(ObjectDetection(track_id=id, box=bb))
+            detected_plates.append(ObjectDetection(track_id=id, box=[bb]))
 
         return detected_plates
 
 
-def crop(frame: cv2.Mat, box: Box) -> cv2.Mat:
-    """Crop frame to the box size."""
-    xmin, xmax, ymin, ymax = box.sides
-    return frame[int(ymin):int(ymax), int(xmin):int(xmax)]
+class TwoLevelDetector:
+    """
+    Use YOLO to detect and track vehicles, then detect the plate within
+    each vehicle.
+    """
+
+    VEHICLE_CLASSES = [2, 3, 5, 7]
+    """yolo classes for car, truck, motorcycle, bus"""
+
+    def __init__(self, vehicle_model: YOLO, plate_model: YOLO) -> None:
+        """`vehicle_model` should be a segmentation model. `plate_model` just
+        needs to detect license plates."""
+        self.vehicles = vehicle_model
+        self.plates = plate_model
+
+    def find(self, frame: cv2.Mat) -> list[ObjectDetection]:
+        # YOLO model returns a list because it can take a list as the source
+        # param. Thus [0], to get the first result of a len-1 list.
+        # https://docs.ultralytics.com/modes/predict/#working-with-results
+        # for tracking, see
+        # https://docs.ultralytics.com/modes/track/#persisting-tracks-loop
+        objects = self.vehicles.track(frame, persist=True,
+                                      classes=TwoLevelDetector.VEHICLE_CLASSES,
+                                      verbose=False)[0]
+
+        # box = objects[0].boxes.data[0].cpu().numpy().astype("int")[:4]
+        # mask = (objects[0].masks.data[0].cpu().numpy()*255).astype("uint8")
+        # masked_frame = extract_by_mask(frame, mask, Box.from_xyxy(box))
+        # cv2.imshow("mask0", masked_frame)
+
+        # convert yolo output to something i can use. this will be a list of:
+        # [xmin, ymin, xmax, ymax, track_id, confidence, class_id]
+        boxes: list[float] = objects.boxes.data.tolist()
+        # each mask is a binary image in normalized float format, so it must be
+        # converted to a 1 byte image.
+        masks: np.ndarray = (objects.masks.data.cpu().numpy()*255).astype("uint8")
+        # convert results
+        detected_plates: list[ObjectDetection] = []
+        for b, m in zip(boxes, masks):
+            vehicle_bb = Box([b[0], b[1]], [b[2], b[3]])
+            id = int(b[4])
+            # crop frame to object
+            masked_obj = extract_by_mask(frame, m, vehicle_bb)
+            # perform plate detection on crop using self.plates()
+            # get list [xmin, ymin, xmax, ymax, confidence, class_id]
+            found_plates = self.plates(masked_obj, verbose=False)[0]
+            found_plates = found_plates.boxes.data.tolist()
+            # append resulting plate
+            if len(found_plates) > 0:
+                plate_bb = Box.from_xyxy(found_plates[0][:4]).translate(*vehicle_bb.topleft)
+                detected_plates.append(ObjectDetection(track_id=id, boxes=[vehicle_bb, plate_bb]))
+
+        return detected_plates
 
 
 class Reader(Protocol):
@@ -116,7 +190,9 @@ class EasyOCRReader:
         plate_texts: list[TextRecognition] = []
         for d in detections:
             # get a crop of the frame containing just the plate
-            plate_crop = crop(frame, d.box)
+            # assumes that the last/inner-most box is the thing to read
+            plate_box = d.boxes[-1]
+            plate_crop = crop(frame, plate_box)
             # do OCR
             # i'm not sure how much width_ths and batch_size improve
             # results or performance
@@ -151,7 +227,8 @@ class Plate(NamedTuple):
     frame: int
     text: str
     confidence: float
-    box: Box
+    boxes: list[Box]
+    """Nested bounding boxes from outer to inner."""
 
 
 PlateValidator = Callable[[Plate, Plate], bool]
@@ -196,7 +273,7 @@ class Processor:
                 frame=frame_number,
                 text=p.text,
                 confidence=p.confidence,
-                box=d.box)
+                boxes=d.boxes)
             for d, p in zip(detections, plate_texts)]
 
         self.results_by_frame.append(plates)
