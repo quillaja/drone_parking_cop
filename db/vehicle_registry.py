@@ -1,4 +1,5 @@
 import csv
+import random
 from dataclasses import asdict, dataclass
 from typing import Iterable, Protocol
 
@@ -78,7 +79,7 @@ class JSONVehicleDB:
 
 
 class CSVVehicleDB:
-    def __init__(self, csv_content: Iterable[str]) -> None:
+    def __init__(self, csv_content: Iterable[str], random_permit_chance: float = 0) -> None:
         """
         Create a VehicleDB from CSV contents as a list of strings.
 
@@ -88,12 +89,16 @@ class CSVVehicleDB:
             db = CSVVehicleDB(file.readlines())
         ```
         """
+        permits = [p.value for p in Permits]
+
         self.data: VehicleDict = {}
         r = csv.DictReader(csv_content)
         for row in r:
             v = VehicleInfo.from_dict(row)
+            if random_permit_chance > 0 and random.random() < random_permit_chance:
+                v.permit_kind = random.choice(permits)
             self.data[v.plate] = v
 
     def find_vehicle_by_plate(self, license_plate: str) -> VehicleInfo | None:
-        license_plate = license_plate.replace(" ", "")
+        license_plate = license_plate.replace(" ", "").replace("-", "")
         return self.data.get(license_plate, None)
