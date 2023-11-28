@@ -10,10 +10,10 @@ class Box:
     bottomright: list[float]
     """Bottom left pixel of the box."""
 
-    # @staticmethod
-    # def from_two_points(top_left: list[float], bottom_right: list[float]) -> 'Detection':
-    #     """Make a Detection using two corners of a box."""
-    #     return Detection(top_left, bottom_right)
+    @staticmethod
+    def from_xyxy(s: list[float]) -> 'Box':
+        """Make a Box from a list of numbers as [xmin, ymin, xmax, ymax]"""
+        return Box([s[0], s[1]], [s[2], s[3]])
 
     @staticmethod
     def from_point_size(topleft: list[float], dx: float, dy: float) -> 'Box':
