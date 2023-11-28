@@ -19,7 +19,7 @@ def crop(frame: cv2.Mat, box: Box) -> cv2.Mat:
 class ObjectDetection(NamedTuple):
     track_id: int
     boxes: list[Box]
-    """Bounding boxes from outer to inner."""
+    """Bounding boxes nested from outer to inner."""
 
 
 class TextRecognition(NamedTuple):
@@ -50,6 +50,8 @@ class YoloSortDetector:
         objects = self.detector(frame, verbose=False)[0]
         # convert yolo output to tracker format by slicing off the last
         # item (the class id) of each detected object
+        if not objects.boxes:
+            return []
         objects = objects.boxes.data.cpu().numpy()[:, :-1]
         # the Sort tracker takes a numpy array with (n,5) shape where the len-5
         # dimension is [xmin,ymin,xmax,ymax,confidence_score]. returns a similar
@@ -65,6 +67,34 @@ class YoloSortDetector:
             bb = Box([obj[0], obj[1]], [obj[2], obj[3]])
             id = int(obj[4])
             detected_plates.append(ObjectDetection(track_id=id, boxes=[bb]))
+
+        return detected_plates
+
+
+class YoloOnlyDetector:
+    """Use YOLO for both tracking and detection."""
+
+    def __init__(self, detector: YOLO) -> None:
+        self.detector = detector
+
+    def find(self, frame: cv2.Mat) -> list[ObjectDetection]:
+        # YOLO model returns a list because it can take a list as the source
+        # param. Thus [0], to get the first result of a len-1 list.
+        # https://docs.ultralytics.com/modes/predict/#working-with-results
+        # for tracking, see
+        # https://docs.ultralytics.com/modes/track/#persisting-tracks-loop
+        objects = self.detector.track(frame, persist=True, verbose=False)[0]
+        # convert yolo output to something i can use. this will be a list of:
+        # [xmin, ymin, xmax, ymax, track_id, confidence, class_id]
+        if not objects.boxes:
+            return []
+        objects = objects.boxes.data.tolist()
+        # convert results
+        detected_plates: list[ObjectDetection] = []
+        for obj in objects:
+            bb = Box([obj[0], obj[1]], [obj[2], obj[3]])
+            id = int(obj[4])
+            detected_plates.append(ObjectDetection(track_id=id, box=[bb]))
 
         return detected_plates
 
@@ -85,32 +115,6 @@ def extract_by_mask(frame: cv2.Mat, mask: cv2.Mat, bbox: Box | None = None) -> c
 
     # crop to box
     return crop(masked_frame, bbox)
-
-
-class YoloOnlyDetector:
-    """Use YOLO for both tracking and detection."""
-
-    def __init__(self, detector: YOLO) -> None:
-        self.detector = detector
-
-    def find(self, frame: cv2.Mat) -> list[ObjectDetection]:
-        # YOLO model returns a list because it can take a list as the source
-        # param. Thus [0], to get the first result of a len-1 list.
-        # https://docs.ultralytics.com/modes/predict/#working-with-results
-        # for tracking, see
-        # https://docs.ultralytics.com/modes/track/#persisting-tracks-loop
-        objects = self.detector.track(frame, persist=True, verbose=False)[0]
-        # convert yolo output to something i can use. this will be a list of:
-        # [xmin, ymin, xmax, ymax, track_id, confidence, class_id]
-        objects = objects.boxes.data.tolist()
-        # convert results
-        detected_plates: list[ObjectDetection] = []
-        for obj in objects:
-            bb = Box([obj[0], obj[1]], [obj[2], obj[3]])
-            id = int(obj[4])
-            detected_plates.append(ObjectDetection(track_id=id, box=[bb]))
-
-        return detected_plates
 
 
 class TwoLevelDetector:
@@ -137,17 +141,15 @@ class TwoLevelDetector:
         objects = self.vehicles.track(frame, persist=True,
                                       classes=TwoLevelDetector.VEHICLE_CLASSES,
                                       verbose=False)[0]
-
-        # box = objects[0].boxes.data[0].cpu().numpy().astype("int")[:4]
-        # mask = (objects[0].masks.data[0].cpu().numpy()*255).astype("uint8")
-        # masked_frame = extract_by_mask(frame, mask, Box.from_xyxy(box))
-        # cv2.imshow("mask0", masked_frame)
-
         # convert yolo output to something i can use. this will be a list of:
         # [xmin, ymin, xmax, ymax, track_id, confidence, class_id]
+        if not objects.boxes:
+            return []
         boxes: list[float] = objects.boxes.data.tolist()
         # each mask is a binary image in normalized float format, so it must be
         # converted to a 1 byte image.
+        if not objects.masks:
+            return []
         masks: np.ndarray = (objects.masks.data.cpu().numpy()*255).astype("uint8")
         # convert results
         detected_plates: list[ObjectDetection] = []
@@ -159,6 +161,8 @@ class TwoLevelDetector:
             # perform plate detection on crop using self.plates()
             # get list [xmin, ymin, xmax, ymax, confidence, class_id]
             found_plates = self.plates(masked_obj, verbose=False)[0]
+            if not found_plates.boxes:
+                continue
             found_plates = found_plates.boxes.data.tolist()
             # append resulting plate
             if len(found_plates) > 0:
