@@ -62,11 +62,11 @@ def draw_text(frame: cv2.Mat, text: str, line: int):
     TEXT_COLOR = (255, 255, 255)
     # h, w = frame.shape
     tsize, _ = cv2.getTextSize(text=text, fontFace=TEXT_FONT,
-                               fontScale=1, thickness=1)
+                               fontScale=1, thickness=2)
     frame = cv2.putText(img=frame, text=text,
-                        org=(0, (line+1)*(tsize[1]+4)),
+                        org=(5, (line+1)*(tsize[1]+6)),
                         fontFace=TEXT_FONT,
-                        fontScale=1, color=TEXT_COLOR, thickness=1)
+                        fontScale=1, color=TEXT_COLOR, thickness=2)
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -148,7 +148,7 @@ class Application:
                 break
 
             # get drone info from log and parking space info from parking db
-            frame_time_ms = frame_to_ms(frame_number, vm.fps)
+            frame_time_ms = frame_to_ms(frame_number, 30)
             drone_info = self.log.drone_info(frame_time_ms)
             space_info = self.parking.find_space_by_location(drone_info.target_position)
 
@@ -159,22 +159,22 @@ class Application:
             draw_center_lines(frame, vidbox)
             fr.draw(frame, cropbox, color=(128, 128, 128))
 
-            draw_text(frame, f"Time: {frame_time_ms:0.2f}", 0)
+            draw_text(frame, f"Frame: {frame_number}", 0)
+            draw_text(frame, f"Time: {frame_time_ms:0.2f}", 1)
+            draw_text(frame, f"Objects: {len(self.processor.max_confidence)}", 2)
             if drone_info:
-                draw_text(frame, f"Time: {drone_info.time_ms:0.2f}", 1)
-                draw_text(frame, "Drone", 2)
-                draw_text(frame,
-                          f" L: {drone_info.drone_position.x:0.2f}, {drone_info.drone_position.y:0.2f}, {drone_info.drone_alt_ft:0.2f}",
-                          3)
-                draw_text(frame,
-                          f" T: {drone_info.target_position.x:0.2f}, {drone_info.target_position.y:0.2f}",
-                          4)
-                draw_text(frame, f" G: {drone_info.ground_alt_ft:0.2f}", 5)
-                draw_text(frame, f" H: {drone_info.heading:0.2f}", 6)
-                draw_text(frame, f" P: {drone_info.gimbal_pitch:0.2f}", 7)
+                dp = drone_info.drone_position
+                tp = drone_info.target_position
+                agl = drone_info.drone_alt_ft - drone_info.ground_alt_ft
+                draw_text(frame, "Drone", 4)
+                draw_text(frame, f" Location: {dp.x:0.2f}, {dp.y:0.2f}, {agl:+0.2f}AGL", 5)
+                draw_text(frame, f" Target:   {tp.x:0.2f}, {tp.y:0.2f}", 6)
+                draw_text(frame, f" DroneAlt: {drone_info.drone_alt_ft:0.2f}", 7)
+                draw_text(frame, f" GrndAlt:  {drone_info.ground_alt_ft:0.2f}", 8)
+                draw_text(frame, f" Compass: {drone_info.heading:0.2f}", 9)
+                draw_text(frame, f" Gimbal:  {drone_info.gimbal_pitch:0.2f}", 10)
             if space_info:
-                draw_text(frame, f"Space: {space_info.id} {space_info.required_permit}", 8)
-            draw_text(frame, f"Objects: {len(self.processor.max_confidence)}", 9)
+                draw_text(frame, f"Parking space: {space_info.id} {space_info.required_permit}", 12)
 
             for p in self.processor.results_by_frame[frame_number]:
                 # move p.box from position in cropped frame to full frame

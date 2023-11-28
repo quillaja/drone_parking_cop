@@ -1,3 +1,4 @@
+import math
 from typing import NamedTuple
 
 import geopandas as gp
@@ -9,7 +10,6 @@ from .augment import drone_targets, ground_elevation
 
 
 class DroneInfo(NamedTuple):
-    time_ms: float
     drone_alt_ft: float
     ground_alt_ft: float
     heading: float
@@ -58,7 +58,6 @@ class FlightLog:
             # a particular query fails
             infos = [
                 DroneInfo(
-                    time_ms=float(ms),
                     drone_alt_ft=self.df.loc[ms, Cols.ALTITUDE],
                     ground_alt_ft=self.df.loc[ms, FlightLog.GROUND_COL],
                     heading=self.df.loc[ms, Cols.HEADING],
