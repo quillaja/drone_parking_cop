@@ -115,23 +115,29 @@ def draw(img: cv2.Mat, box: Box,
     # draw upper text
     if upper_text:
         tsize, _ = cv2.getTextSize(text=upper_text, fontFace=TEXT_FONT,
-                                   fontScale=1, thickness=1)
+                                   fontScale=1.25, thickness=2)
+        img = cv2.rectangle(img=img, pt1=pt_min,
+                            pt2=(pt_min[0]+tsize[0], pt_min[1]-tsize[1]),
+                            color=BOX_COLOR, thickness=4)
         img = cv2.rectangle(img=img, pt1=pt_min,
                             pt2=(pt_min[0]+tsize[0], pt_min[1]-tsize[1]),
                             color=BOX_COLOR, thickness=-1)
         img = cv2.putText(img=img, text=upper_text,
                           org=pt_min,
                           fontFace=TEXT_FONT,
-                          fontScale=1, color=TEXT_COLOR, thickness=1)
+                          fontScale=1.25, color=TEXT_COLOR, thickness=2)
 
     # # draw lower text
     if lower_text:
         tsize, _ = cv2.getTextSize(text=lower_text, fontFace=TEXT_FONT,
-                                   fontScale=1, thickness=1)
+                                   fontScale=1.25, thickness=2)
+        img = cv2.rectangle(img=img, pt1=(pt_min[0], pt_max[1]),
+                            pt2=(pt_min[0]+tsize[0], pt_max[1]+tsize[1]),
+                            color=BOX_COLOR, thickness=4)
         img = cv2.rectangle(img=img, pt1=(pt_min[0], pt_max[1]),
                             pt2=(pt_min[0]+tsize[0], pt_max[1]+tsize[1]),
                             color=BOX_COLOR, thickness=-1)
         img = cv2.putText(img=img, text=lower_text,
                           org=(pt_min[0], pt_max[1]+tsize[1]),
                           fontFace=TEXT_FONT,
-                          fontScale=1, color=TEXT_COLOR, thickness=1)
+                          fontScale=1.25, color=TEXT_COLOR, thickness=2)
