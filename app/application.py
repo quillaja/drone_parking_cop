@@ -43,16 +43,17 @@ def frame_to_ms(frame: int, fps: float) -> float:
     return (frame/fps)*1000
 
 
-def draw_center_lines(frame: cv2.Mat, vidbox: fr.Box):
-    frame_h_center = int(vidbox.center[0])
-    frame_v_center = int(vidbox.center[1])
+def draw_center_lines(frame: cv2.Mat, box: fr.Box):
+    frame_h_center = int(box.center[0])
+    frame_v_center = int(box.center[1])
+    w, h = box.width, box.height
     cv2.line(frame,
              pt1=(frame_h_center, 0),
-             pt2=(frame_h_center, int(vidbox.bottomright[1])),
+             pt2=(frame_h_center, int(box.bottomright[1])),
              color=(255, 0, 0), thickness=1)
     cv2.line(frame,
              pt1=(0, frame_v_center),
-             pt2=(int(vidbox.bottomright[0]), frame_v_center),
+             pt2=(int(box.bottomright[0]), frame_v_center),
              color=(255, 0, 0), thickness=1)
 
 
@@ -69,7 +70,9 @@ def draw_text(frame: cv2.Mat, text: str, line: int):
 
 
 ROOT = Path(__file__).resolve().parent.parent
-YOLO_DATA = ROOT/"assets/yolov8n.pt"  # yolov8n.pt for general objects
+YOLO_DETECT_DATA = ROOT/"assets/yolov8n.pt"
+YOLO_SEGMENT_DATA = ROOT/"assets/yolov8n-seg.pt"
+YOLO_PLATE_DATA = ROOT/"assets/license_plate_detector.pt"
 LICENSE_PLATE_DATA = ROOT/"assets/plate_database.csv"
 PARKING_SPACE_DATA = ROOT/"assets/plates.gpkg"
 PCC_DEM = ROOT/"assets/pcc_sylvania_dtm_2014_crs6559.tif"
@@ -90,9 +93,12 @@ class Application:
 
         self.processor = fr.Processor(
             # detector=frame.YoloSortDetector(
-            #     detector=YOLO(YOLO_DATA),
+            #     detector=YOLO(YOLO_DETECT_DATA),
             #     tracker=Sort(min_hits=6)),
-            detector=fr.YoloOnlyDetector(YOLO(YOLO_DATA)),
+            # detector=fr.YoloOnlyDetector(YOLO(YOLO_DETECT_DATA)),
+            detector=fr.TwoLevelDetector(
+                vehicle_model=YOLO(YOLO_SEGMENT_DATA),
+                plate_model=YOLO(YOLO_PLATE_DATA)),
             reader=fr.EasyOCRReader(reader=easyocr.Reader(["en"])))
 
     def get_video_metrics(self) -> VideoMetrics:
@@ -121,20 +127,19 @@ class Application:
                                     ground_dem_filename=PCC_DEM)
 
     def run(self):
-        SCALE = 1
+        """
+        """
         vm = self.get_video_metrics()
-        frame_number = 0
-
-        cropbox = fr.Box([vm.width*0.0, vm.height*0.0],
-                         [vm.width*(1-0.0), vm.height*(1-0.0)])
-        # box representing cropped frame
-        vidbox = cropbox.translate(-cropbox.topleft[0], -cropbox.topleft[1]).scale(SCALE)
+        cropbox = fr.Box([vm.width*0.1, vm.height*0.25],
+                         [vm.width*(1-0.1), vm.height*(1-0.0)])
+        # box representing the frame
+        vidbox = fr.Box([0, 0], [vm.width, vm.height])
 
         # Define the codec and create VideoWriter object
         fourcc = cv2.VideoWriter_fourcc(*'DIVX')
-        out = cv2.VideoWriter('output.avi', fourcc, 30.0, (int(vidbox.width), int(vidbox.height)))
-        print(vidbox)
+        out = cv2.VideoWriter('output.avi', fourcc, 30.0, (vm.width, vm.height))
 
+        frame_number = 0
         while self.video.isOpened():
             has_frame, frame = self.video.read()
             # if frame is read correctly has_frame is True
@@ -147,10 +152,8 @@ class Application:
             drone_target = self.log.drone_info(frame_time_ms, djilog.DronePosition.target)
             space_info = self.parking.find_space_by_location(drone_target)
 
-            # frame = fr.crop(frame, cropbox)
-            frame = cv2.resize(frame, dsize=(0, 0), fx=SCALE, fy=SCALE)  # resize huge 4K video
-
-            self.processor.process(frame)
+            frame_cropped = fr.crop(frame, cropbox)  # use cropped frame for actual detections
+            self.processor.process(frame_cropped)
             self.processor.update_max(frame_number)
 
             # print(f"=== frame {frame_number} of {vm.frames} = {frame_time_ms}ms ===")
@@ -161,6 +164,7 @@ class Application:
             # # print()
 
             draw_center_lines(frame, vidbox)
+            fr.draw(frame, cropbox, color=(128, 128, 128))
 
             if drone_pos:
                 draw_text(frame, f"D: {drone_pos.x:0.2f}, {drone_pos.y:0.2f}", 0)
@@ -171,10 +175,11 @@ class Application:
             draw_text(frame, f"MC: {len(self.processor.max_confidence)}", 3)
 
             for p in self.processor.results_by_frame[frame_number]:
-                checkbox = p.box  # .scale_center(1.5, 5)
-                # fr.draw(frame, checkbox, box_color=(255, 0, 0))
+                # move p.box from position in cropped frame to full frame
+                bbs = [b.translate(*cropbox.topleft) for b in p.boxes]
+                outer_bb = bbs[0]
                 mc = self.processor.max_confidence[p.track_id]
-                if checkbox.contains(*vidbox.center):
+                if outer_bb.contains(*vidbox.center):
                     reg = self.vehicles.find_vehicle_by_plate(mc.text)
                     # print(p)
                     # print(space_info)
@@ -182,15 +187,22 @@ class Application:
                     # print()
                     t = "None"
                     b = "None"
+                    color = (255, 0, 0)  # blue
                     if space_info:
                         t = f"{mc.text}:{space_info.id}:{space_info.required_permit}"
                     if reg:
                         b = f"{reg.color} {reg.make}:{reg.permit_kind}"
-                    fr.draw(frame, p.box, t, b, (0, 0, 255))
+                    if reg and space_info:
+                        if reg.permit_kind == space_info.required_permit:
+                            color = (0, 255, 0)  # green
+                        else:
+                            color = (0, 0, 255)  # red
+                    fr.draw(frame, outer_bb, t, b, color)
                 else:
-                    fr.draw(frame, p.box,
+                    fr.draw(frame, outer_bb,
                             f"{mc.track_id}:{mc.text}",
-                            f"{mc.confidence:0.2f}")
+                            f"{mc.confidence:0.2f}",
+                            (255, 255, 255))
 
             showframe = cv2.resize(frame, dsize=(0, 0), fx=0.5, fy=0.5)  # resize huge 4K video
             cv2.imshow('frame', showframe)
