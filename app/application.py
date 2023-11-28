@@ -1,3 +1,4 @@
+import math
 from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple
@@ -62,11 +63,15 @@ def draw_text(frame: cv2.Mat, text: str, line: int):
     TEXT_COLOR = (255, 255, 255)
     # h, w = frame.shape
     tsize, _ = cv2.getTextSize(text=text, fontFace=TEXT_FONT,
-                               fontScale=1, thickness=2)
+                               fontScale=1.5, thickness=2)
     frame = cv2.putText(img=frame, text=text,
-                        org=(5, (line+1)*(tsize[1]+6)),
+                        org=(5, (line+1)*(tsize[1]+8)),
                         fontFace=TEXT_FONT,
-                        fontScale=1, color=TEXT_COLOR, thickness=2)
+                        fontScale=1.5, color=(0, 0, 0), thickness=6)
+    frame = cv2.putText(img=frame, text=text,
+                        org=(5, (line+1)*(tsize[1]+8)),
+                        fontFace=TEXT_FONT,
+                        fontScale=1.5, color=TEXT_COLOR, thickness=2)
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -130,7 +135,7 @@ class Application:
         """
         """
         vm = self.get_video_metrics()
-        cropbox = fr.Box([vm.width*0.1, vm.height*0.1],
+        cropbox = fr.Box([vm.width*0.1, vm.height*0.15],
                          [vm.width*(1-0.1), vm.height*(1-0.05)])
         # box representing the frame
         vidbox = fr.Box([0, 0], [vm.width, vm.height])
@@ -168,14 +173,15 @@ class Application:
                 tp = drone_info.target_position
                 agl = drone_info.drone_alt_ft - drone_info.ground_alt_ft
                 draw_text(frame, "Drone", 4)
-                draw_text(frame, f" Location: {dp.x:0.2f}, {dp.y:0.2f}, {agl:+0.2f}AGL", 5)
+                draw_text(frame, f" Location: {dp.x:0.2f}, {dp.y:0.2f}", 5)
                 draw_text(frame, f" Target:   {tp.x:0.2f}, {tp.y:0.2f}", 6)
-                draw_text(frame, f" DroneAlt: {drone_info.drone_alt_ft:0.2f}", 7)
-                draw_text(frame, f" GrndAlt:  {drone_info.ground_alt_ft:0.2f}", 8)
-                draw_text(frame, f" Compass: {drone_info.heading:0.2f}", 9)
-                draw_text(frame, f" Gimbal:  {drone_info.gimbal_pitch:0.2f}", 10)
+                draw_text(frame, f" DroneMSL: {drone_info.drone_alt_ft:0.2f}", 7)
+                draw_text(frame, f" GrndMSL:  {drone_info.ground_alt_ft:0.2f}", 8)
+                draw_text(frame, f" DroneAGL: {agl:0.2f}AGL", 9)
+                draw_text(frame, f" Compass: {drone_info.heading:0.2f}", 10)
+                draw_text(frame, f" Gimbal:  {drone_info.gimbal_pitch:0.2f}", 11)
             if space_info:
-                draw_text(frame, f"Parking space: {space_info.id} {space_info.required_permit}", 12)
+                draw_text(frame, f"Parking space: {space_info.id} {space_info.required_permit}", 13)
 
             # sort detected objs by bb ymin so they are drawn "back to front"
             zsorted = sorted(self.processor.results_by_frame[frame_number],
