@@ -4,13 +4,14 @@ from typing import Callable, NamedTuple, Protocol
 import cv2
 import easyocr
 import numpy as np
+from cv2.typing import MatLike
 from ultralytics import YOLO
 
 from frame.box import Box
 from sort.sort import Sort
 
 
-def crop(frame: cv2.Mat, box: Box) -> cv2.Mat:
+def crop(frame: MatLike, box: Box) -> MatLike:
     """Crop frame to the box size."""
     xmin, xmax, ymin, ymax = box.sides
     return frame[int(ymin):int(ymax), int(xmin):int(xmax)]
@@ -31,7 +32,7 @@ class TextRecognition(NamedTuple):
 class Detector(Protocol):
     """A Detector finds objects within an image or video frame."""
 
-    def find(self, frame: cv2.Mat) -> list[ObjectDetection]:
+    def find(self, frame: MatLike) -> list[ObjectDetection]:
         """Find objects in frame."""
         ...
 
@@ -43,7 +44,7 @@ class YoloSortDetector:
         self.detector = detector
         self.tracker = tracker
 
-    def find(self, frame: cv2.Mat) -> list[ObjectDetection]:
+    def find(self, frame: MatLike) -> list[ObjectDetection]:
         # YOLO model returns a list because it can take a list as the source
         # param. Thus [0], to get the first result of a len-1 list.
         # https://docs.ultralytics.com/modes/predict/#working-with-results
@@ -77,7 +78,7 @@ class YoloOnlyDetector:
     def __init__(self, detector: YOLO) -> None:
         self.detector = detector
 
-    def find(self, frame: cv2.Mat) -> list[ObjectDetection]:
+    def find(self, frame: MatLike) -> list[ObjectDetection]:
         # YOLO model returns a list because it can take a list as the source
         # param. Thus [0], to get the first result of a len-1 list.
         # https://docs.ultralytics.com/modes/predict/#working-with-results
@@ -94,12 +95,12 @@ class YoloOnlyDetector:
         for obj in objects:
             bb = Box([obj[0], obj[1]], [obj[2], obj[3]])
             id = int(obj[4])
-            detected_plates.append(ObjectDetection(track_id=id, box=[bb]))
+            detected_plates.append(ObjectDetection(track_id=id, boxes=[bb]))
 
         return detected_plates
 
 
-def extract_by_mask(frame: cv2.Mat, mask: cv2.Mat, bbox: Box | None = None) -> cv2.Mat:
+def extract_by_mask(frame: MatLike, mask: MatLike, bbox: Box | None = None) -> MatLike:
     """
     Use mask (8bit 1 channel binary image) to keep only the parts of frame that
     correspond to in mask. Then, crop the frame by box.
@@ -132,7 +133,7 @@ class TwoLevelDetector:
         self.vehicles = vehicle_model
         self.plates = plate_model
 
-    def find(self, frame: cv2.Mat) -> list[ObjectDetection]:
+    def find(self, frame: MatLike) -> list[ObjectDetection]:
         # YOLO model returns a list because it can take a list as the source
         # param. Thus [0], to get the first result of a len-1 list.
         # https://docs.ultralytics.com/modes/predict/#working-with-results
@@ -178,7 +179,7 @@ class Reader(Protocol):
     based on the detected objects.
     """
 
-    def read(self, frame: cv2.Mat, detections: list[ObjectDetection]) -> list[TextRecognition]:
+    def read(self, frame: MatLike, detections: list[ObjectDetection]) -> list[TextRecognition]:
         """Read text from frame found within the list of object detections."""
         ...
 
@@ -190,7 +191,7 @@ class EasyOCRReader:
         self.ocr = reader
         self.filter = filter if filter is not None else lambda x: True
 
-    def read(self, frame: cv2.Mat, detections: list[ObjectDetection]) -> list[TextRecognition]:
+    def read(self, frame: MatLike, detections: list[ObjectDetection]) -> list[TextRecognition]:
         plate_texts: list[TextRecognition] = []
         for d in detections:
             # get a crop of the frame containing just the plate
@@ -273,7 +274,7 @@ class Processor:
         self.max_confidence: dict[int, Plate] = {}
         self.validator: PlateValidator = validator
 
-    def process(self, frame: cv2.Mat):
+    def process(self, frame: MatLike):
         """called once per frame"""
         frame_number = len(self.results_by_frame)
 

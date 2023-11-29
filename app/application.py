@@ -1,15 +1,16 @@
-import math
 from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple
 
 import cv2
 import easyocr
+from cv2.typing import MatLike
 from ultralytics import YOLO
 
 import db
 import djilog
 import frame as fr
+from app import draw
 from sort.sort import Sort
 
 
@@ -21,7 +22,7 @@ class VideoMetrics(NamedTuple):
     length_sec: float
 
 
-def video_size(video: cv2.VideoCapture) -> (int, int):
+def video_size(video: cv2.VideoCapture) -> tuple[int, int]:
     w = video.get(cv2.CAP_PROP_FRAME_WIDTH)
     h = video.get(cv2.CAP_PROP_FRAME_HEIGHT)
     return (int(w), int(h))
@@ -42,36 +43,6 @@ def video_length(video: cv2.VideoCapture) -> float:
 
 def frame_to_ms(frame: int, fps: float) -> float:
     return (frame/fps)*1000
-
-
-def draw_center_lines(frame: cv2.Mat, box: fr.Box):
-    frame_h_center = int(box.center[0])
-    frame_v_center = int(box.center[1])
-    w, h = box.width, box.height
-    cv2.line(frame,
-             pt1=(frame_h_center, 0),
-             pt2=(frame_h_center, int(box.bottomright[1])),
-             color=(255, 0, 0), thickness=1)
-    cv2.line(frame,
-             pt1=(0, frame_v_center),
-             pt2=(int(box.bottomright[0]), frame_v_center),
-             color=(255, 0, 0), thickness=1)
-
-
-def draw_text(frame: cv2.Mat, text: str, line: int):
-    TEXT_FONT = cv2.FONT_HERSHEY_DUPLEX
-    TEXT_COLOR = (255, 255, 255)
-    # h, w = frame.shape
-    tsize, _ = cv2.getTextSize(text=text, fontFace=TEXT_FONT,
-                               fontScale=1.5, thickness=2)
-    frame = cv2.putText(img=frame, text=text,
-                        org=(5, (line+1)*(tsize[1]+8)),
-                        fontFace=TEXT_FONT,
-                        fontScale=1.5, color=(0, 0, 0), thickness=6)
-    frame = cv2.putText(img=frame, text=text,
-                        org=(5, (line+1)*(tsize[1]+8)),
-                        fontFace=TEXT_FONT,
-                        fontScale=1.5, color=TEXT_COLOR, thickness=2)
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -131,6 +102,72 @@ class Application:
         self.log = djilog.FlightLog(log_segment=self.video_segments[index],
                                     ground_dem_filename=PCC_DEM)
 
+    def _draw_frame_marks(self, frame: MatLike, cropbox: fr.Box, vidbox: fr.Box):
+        """draw representations of cropbox and vidbox."""
+        draw.center_lines(frame, vidbox)
+        draw.box(frame, cropbox, color=draw.GRAY50)
+
+    def _draw_vehicle_box(self, frame: MatLike, center: list[float],
+                          track_id: int, bb: fr.Box, space_info: db.SpaceInfo):
+        """Draw box and annotation for a particular vehicle"""
+        mc = self.processor.max_confidence[track_id]
+        if bb.contains(*center):
+            reg = self.vehicles.find_vehicle_by_plate(mc.text)
+            t = f"{mc.track_id}:{mc.text} {mc.confidence:0.2f}"
+            b = ""
+            color = draw.BLUE
+            if space_info:
+                t += f" |{space_info.id}:{space_info.required_permit}"
+            if reg:
+                b = f"{reg.color} {reg.make}:{reg.permit_kind}"
+            if reg and space_info:
+                if reg.permit_kind == space_info.required_permit:
+                    color = draw.GREEN
+                else:
+                    color = draw.RED
+            draw.box(frame, bb, t, b, color)
+        else:
+            draw.box(frame, bb,
+                     f"{mc.track_id}:{mc.text} {mc.confidence:0.2f}")
+
+    def _draw_detections(self, frame: MatLike, frame_number: int,
+                         cropbox: fr.Box, vidbox: fr.Box, space_info: db.SpaceInfo):
+        """
+        draw boxes/annotations for all vehicles found in the frame with number `frame_number`.
+        """
+        # sort detected objs by bb ymin so they are drawn "back to front"
+        zsorted = sorted(self.processor.results_by_frame[frame_number],
+                         key=lambda p: p.boxes[0].topleft[1])
+        for p in zsorted:
+            # move p.box from position in cropped frame to full frame
+            bbs = [b.translate(*cropbox.topleft) for b in p.boxes]
+            for bb in bbs:
+                draw.box(frame, bb, color=draw.CYAN)
+            outer_bb = bbs[0]
+            self._draw_vehicle_box(frame, vidbox.center, p.track_id, outer_bb, space_info)
+
+    def _draw_info(self, frame: MatLike, frame_number: int, frame_time_ms: float, num_objects: int,
+                   drone_info: djilog.DroneInfo, space_info: db.SpaceInfo):
+        """draw text info overlay in top left corner of frame"""
+        draw.textline(frame, f"Frame: {frame_number}", 0)
+        draw.textline(frame, f"Time: {frame_time_ms:0.2f}", 1)
+        draw.textline(frame, f"Objects: {num_objects}", 2)
+        if drone_info:
+            dp = drone_info.drone_position
+            tp = drone_info.target_position
+            agl = drone_info.drone_alt_ft - drone_info.ground_alt_ft
+            draw.textline(frame, "Drone", 4)
+            draw.textline(frame, f" Location: {dp.x:0.2f}, {dp.y:0.2f}", 5)
+            draw.textline(frame, f" Target:   {tp.x:0.2f}, {tp.y:0.2f}", 6)
+            draw.textline(frame, f" DroneMSL: {drone_info.drone_alt_ft:0.2f}", 7)
+            draw.textline(frame, f" GrndMSL:  {drone_info.ground_alt_ft:0.2f}", 8)
+            draw.textline(frame, f" DroneAGL: {agl:0.2f}AGL", 9)
+            draw.textline(frame, f" Compass: {drone_info.heading:0.2f}", 10)
+            draw.textline(frame, f" Gimbal:  {drone_info.gimbal_pitch:0.2f}", 11)
+        if space_info:
+            draw.textline(
+                frame, f"Parking space: {space_info.id} {space_info.required_permit}", 13)
+
     def run(self):
         """
         """
@@ -161,58 +198,11 @@ class Application:
             frame_cropped = fr.crop(frame, cropbox)  # use cropped frame for actual detections
             self.processor.process(frame_cropped)
             self.processor.update_max(frame_number)
+            num_objects = len(self.processor.max_confidence)
 
-            draw_center_lines(frame, vidbox)
-            fr.draw(frame, cropbox, color=(128, 128, 128))
-
-            draw_text(frame, f"Frame: {frame_number}", 0)
-            draw_text(frame, f"Time: {frame_time_ms:0.2f}", 1)
-            draw_text(frame, f"Objects: {len(self.processor.max_confidence)}", 2)
-            if drone_info:
-                dp = drone_info.drone_position
-                tp = drone_info.target_position
-                agl = drone_info.drone_alt_ft - drone_info.ground_alt_ft
-                draw_text(frame, "Drone", 4)
-                draw_text(frame, f" Location: {dp.x:0.2f}, {dp.y:0.2f}", 5)
-                draw_text(frame, f" Target:   {tp.x:0.2f}, {tp.y:0.2f}", 6)
-                draw_text(frame, f" DroneMSL: {drone_info.drone_alt_ft:0.2f}", 7)
-                draw_text(frame, f" GrndMSL:  {drone_info.ground_alt_ft:0.2f}", 8)
-                draw_text(frame, f" DroneAGL: {agl:0.2f}AGL", 9)
-                draw_text(frame, f" Compass: {drone_info.heading:0.2f}", 10)
-                draw_text(frame, f" Gimbal:  {drone_info.gimbal_pitch:0.2f}", 11)
-            if space_info:
-                draw_text(frame, f"Parking space: {space_info.id} {space_info.required_permit}", 13)
-
-            # sort detected objs by bb ymin so they are drawn "back to front"
-            zsorted = sorted(self.processor.results_by_frame[frame_number],
-                             key=lambda p: p.boxes[0].topleft[1])
-            for p in zsorted:
-                # move p.box from position in cropped frame to full frame
-                bbs = [b.translate(*cropbox.topleft) for b in p.boxes]
-                for bb in bbs:
-                    fr.draw(frame, bb, color=(255, 255, 0))  # cyan
-                outer_bb = bbs[0]
-                mc = self.processor.max_confidence[p.track_id]
-                if outer_bb.contains(*vidbox.center):
-                    reg = self.vehicles.find_vehicle_by_plate(mc.text)
-                    t = f"{mc.track_id}:{mc.text} {mc.confidence:0.2f}"
-                    b = ""
-                    color = (255, 0, 0)  # blue
-                    if space_info:
-                        t += f" |{space_info.id}:{space_info.required_permit}"
-                    if reg:
-                        b = f"{reg.color} {reg.make}:{reg.permit_kind}"
-                    if reg and space_info:
-                        if reg.permit_kind == space_info.required_permit:
-                            color = (0, 255, 0)  # green
-                        else:
-                            color = (0, 0, 255)  # red
-                    fr.draw(frame, outer_bb, t, b, color)
-                else:
-                    fr.draw(frame, outer_bb,
-                            f"{mc.track_id}:{mc.text} {mc.confidence:0.2f}",
-                            "",
-                            (255, 255, 255))  # white
+            self._draw_frame_marks(frame, cropbox, vidbox)
+            self._draw_detections(frame, frame_number, cropbox, vidbox, space_info)
+            self._draw_info(frame, frame_number, frame_time_ms, num_objects, drone_info, space_info)
 
             showframe = cv2.resize(frame, dsize=(0, 0), fx=0.5, fy=0.5)  # resize huge 4K video
             cv2.imshow('frame', showframe)
@@ -230,10 +220,3 @@ class Application:
         out.release()
         self.video.release()
         cv2.destroyAllWindows()
-
-
-def test() -> Application:
-    a = Application(video="../data/DJI_0665.MP4",
-                    log="../data/logs/Oct-17th-2023-02-53PM-Flight-Airdata.csv")
-    a.select_active_log(1)
-    return a
