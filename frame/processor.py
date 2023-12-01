@@ -245,39 +245,17 @@ class Plate(NamedTuple):
     """Nested bounding boxes from outer to inner."""
 
 
-PlateValidator = Callable[[Plate, Plate], bool]
-"""
-A function that determines whether or not too keep a new Plate vs and old one.
-PlateValidator(old, new) -> bool
-"""
-
-PLATE_NUMBER = re.compile(r"[A-Z0-9]{4,7}")
-"""regexp to id a variety of plates"""
-
-
-def default_validator(old: Plate, new: Plate) -> bool:
-    """Keep new if text is 4-7 alphanumeric and new confidence > old confidence."""
-    if not PLATE_NUMBER.match(new.text):
-        return False
-    return new.confidence > old.confidence
-
-
 class Processor:
     """
-    A Processor extracts and manages data from sequential video frames.
+    A Processor extracts data from a video frame.
     """
 
-    def __init__(self, detector: Detector, reader: Reader, validator: PlateValidator = default_validator) -> None:
+    def __init__(self, detector: Detector, reader: Reader) -> None:
         self.detector = detector
         self.reader = reader
-        self.results_by_frame: list[list[Plate]] = []
-        self.max_confidence: dict[int, Plate] = {}
-        self.validator: PlateValidator = validator
 
-    def process(self, frame: MatLike):
+    def process(self, frame: MatLike, frame_number: int) -> list[Plate]:
         """called once per frame"""
-        frame_number = len(self.results_by_frame)
-
         detections = self.detector.find(frame)
         plate_texts = self.reader.read(frame, detections)
 
@@ -290,15 +268,4 @@ class Processor:
                 boxes=d.boxes)
             for d, p in zip(detections, plate_texts)]
 
-        self.results_by_frame.append(plates)
-        # self.update_max(frame_number)
-
-    def update_max(self, frame_number: int):
-        """
-        Updates the max_confidence dict using plates in `frame_number`.
-        """
-        for p in self.results_by_frame[frame_number]:
-            id = p.track_id
-            prev_plate = self.max_confidence.setdefault(id, p)
-            if self.validator(prev_plate, p):
-                self.max_confidence[id] = p
+        return plates

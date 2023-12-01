@@ -1,5 +1,6 @@
 from datetime import datetime
 from pathlib import Path
+from re import T
 from typing import NamedTuple
 
 import cv2
@@ -11,6 +12,7 @@ import db
 import djilog
 import frame as fr
 from app import draw
+from app.data import ResultAccumulator
 from sort.sort import Sort
 
 
@@ -56,7 +58,7 @@ PCC_DEM = ROOT/"assets/pcc_sylvania_dtm_2014_crs6559.tif"
 
 class Application:
     def __init__(self, video: str, log: str) -> None:
-        self.video = cv2.VideoCapture(video)
+        self.input_video = cv2.VideoCapture(video)
         self.video_segments = djilog.segment(djilog.read_log(
             log,
             # input_crs="EPSG:4326",
@@ -68,23 +70,23 @@ class Application:
             self.vehicles = db.CSVVehicleDB(file.readlines(), 0.5)
 
         self.processor = fr.Processor(
-            # detector=frame.YoloSortDetector(
-            #     detector=YOLO(YOLO_DETECT_DATA),
-            #     tracker=Sort(min_hits=6)),
-            # detector=fr.YoloOnlyDetector(YOLO(YOLO_DETECT_DATA)),
             detector=fr.TwoLevelDetector(
                 vehicle_model=YOLO(YOLO_SEGMENT_DATA),
                 plate_model=YOLO(YOLO_PLATE_DATA)),
             reader=fr.EasyOCRReader(reader=easyocr.Reader(["en"])))
 
+        self.results = ResultAccumulator()
+        self.show_live = True
+        self.output_video: str = ""
+
     def get_video_metrics(self) -> VideoMetrics:
         """Video information."""
-        w, h = video_size(self.video)
+        w, h = video_size(self.input_video)
         return VideoMetrics(
             width=w, height=h,
-            fps=video_fps(self.video),
-            frames=video_frame_count(self.video),
-            length_sec=video_length(self.video))
+            fps=video_fps(self.input_video),
+            frames=video_frame_count(self.input_video),
+            length_sec=video_length(self.input_video))
 
     def get_segment_selection(self) -> list[tuple[int, datetime, datetime, float]]:
         """
@@ -110,7 +112,7 @@ class Application:
     def _draw_vehicle_box(self, frame: MatLike, center: list[float],
                           track_id: int, bb: fr.Box, space_info: db.SpaceInfo):
         """Draw box and annotation for a particular vehicle"""
-        mc = self.processor.max_confidence[track_id]
+        mc = self.results.best[track_id]
         if bb.contains(*center):
             reg = self.vehicles.find_vehicle_by_plate(mc.text)
             t = f"{mc.track_id}:{mc.text} {mc.confidence:0.2f}"
@@ -136,7 +138,8 @@ class Application:
         draw boxes/annotations for all vehicles found in the frame with number `frame_number`.
         """
         # sort detected objs by bb ymin so they are drawn "back to front"
-        zsorted = sorted(self.processor.results_by_frame[frame_number],
+        # due to the position of the drone and angle of the camera
+        zsorted = sorted(self.results.frames[frame_number],
                          key=lambda p: p.boxes[0].topleft[1])
         for p in zsorted:
             # move p.box from position in cropped frame to full frame
@@ -172,21 +175,30 @@ class Application:
         """
         """
         vm = self.get_video_metrics()
+        # box representing the full original frame
+        framebox = fr.Box([0, 0], [vm.width, vm.height])
+        # box for a cropped frame
+        # much of the video does not include the things we want to detect,
+        # nor can they be read (with ocr) because of their small size in the frame
         cropbox = fr.Box([vm.width*0.1, vm.height*0.15],
                          [vm.width*(1-0.1), vm.height*(1-0.05)])
-        # box representing the frame
-        vidbox = fr.Box([0, 0], [vm.width, vm.height])
 
         # Define the codec and create VideoWriter object
-        fourcc = cv2.VideoWriter_fourcc(*'DIVX')
-        out = cv2.VideoWriter('output.avi', fourcc, 30.0, (vm.width, vm.height))
+        out: cv2.VideoWriter | None = None
+        if self.output_video:
+            fourcc = cv2.VideoWriter_fourcc(*'DIVX')
+            out = cv2.VideoWriter(self.output_video, fourcc, 30.0, (vm.width, vm.height))
+
+        print("Press Q to quit processing.")
+        if self.show_live:
+            print("Press P to pause the live display.")
 
         frame_number = 0
-        while self.video.isOpened():
-            has_frame, frame = self.video.read()
+        while self.input_video.isOpened():
+            has_frame, frame = self.input_video.read()
             # if frame is read correctly has_frame is True
             if not has_frame:
-                print(" No more frames. Exiting ...")
+                print("No more frames.")
                 break
 
             # get drone info from log and parking space info from parking db
@@ -195,28 +207,34 @@ class Application:
             if drone_info:
                 space_info = self.parking.find_space_by_location(drone_info.target_position)
 
+            # the main object recognition and reading
             frame_cropped = fr.crop(frame, cropbox)  # use cropped frame for actual detections
-            self.processor.process(frame_cropped)
-            self.processor.update_max(frame_number)
-            num_objects = len(self.processor.max_confidence)
+            results = self.processor.process(frame_cropped, frame_number)
+            self.results.add(results)
+            num_objects = self.results.total_found
 
-            self._draw_frame_marks(frame, cropbox, vidbox)
-            self._draw_detections(frame, frame_number, cropbox, vidbox, space_info)
+            self._draw_frame_marks(frame, cropbox, framebox)
+            self._draw_detections(frame, frame_number, cropbox, framebox, space_info)
             self._draw_info(frame, frame_number, frame_time_ms, num_objects, drone_info, space_info)
 
-            showframe = cv2.resize(frame, dsize=(0, 0), fx=0.5, fy=0.5)  # resize huge 4K video
-            cv2.imshow('frame', showframe)
+            frame_number += 1
 
-            out.write(frame)
+            if self.show_live:
+                showframe = cv2.resize(frame, dsize=(0, 0), fx=0.5, fy=0.5)  # resize huge 4K video
+                cv2.imshow('frame', showframe)
 
+            if out is not None:
+                out.write(frame)
+
+            # pause or quit
             key = cv2.pollKey()
             if key == ord('q'):
                 break
             elif key == ord('p'):
                 cv2.waitKey(0)
 
-            frame_number += 1
-
-        out.release()
-        self.video.release()
+        # release resources
+        if out is not None:
+            out.release()
+        self.input_video.release()
         cv2.destroyAllWindows()

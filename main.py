@@ -35,6 +35,7 @@ def main(args: argparse.Namespace):
 
     print(f"Processing video...")
     app.select_active_log(args.segment)
+    app.output_video = "output.avi"
     app.run()
     print(f"Finished processing.")
 
