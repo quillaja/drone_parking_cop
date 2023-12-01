@@ -1,6 +1,7 @@
 from typing import NamedTuple
 
 import cv2
+import numpy as np
 from cv2.typing import MatLike
 
 import frame as fr
@@ -21,6 +22,12 @@ GRAY50 = Color(127, 127, 127)
 CYAN = Color(255, 255, 0)
 MAGENTA = Color(255, 0, 255)
 YELLOW = Color(0, 255, 255)
+
+
+def text_color(bg_color: Color) -> Color:
+    """Return black or white depending upon the lightness (LAB) of bg_color"""
+    lstar = cv2.cvtColor(np.float32([[bg_color]]), cv2.COLOR_BGR2LAB)[0][0][0]
+    return BLACK if lstar > 50 else WHITE
 
 
 def center_lines(frame: MatLike, box: fr.Box, color: Color = BLUE):
@@ -63,10 +70,11 @@ def box(img: MatLike, box: fr.Box,
     """draw box overlayed on image. this modifies the image."""
     BOX_COLOR = color
     BOX_THICKNESS = 2
-    TEXT_COLOR = BLACK
+    TEXT_COLOR = text_color(BOX_COLOR)
     TEXT_FONT = cv2.FONT_HERSHEY_DUPLEX
     TEXT_SIZE = 1.25
     TEXT_THICKNESS = 2
+    # HALO_COLOR = WHITE
 
     pt_min, pt_max = box.as_int()
     # draw box
@@ -82,6 +90,10 @@ def box(img: MatLike, box: fr.Box,
         img = cv2.rectangle(img=img, pt1=pt_min,
                             pt2=(pt_min[0]+tsize[0], pt_min[1]-tsize[1]),
                             color=BOX_COLOR, thickness=-1)
+        # img = cv2.putText(img=img, text=upper_text,
+        #                   org=pt_min,
+        #                   fontFace=TEXT_FONT,
+        #                   fontScale=TEXT_SIZE, color=HALO_COLOR, thickness=TEXT_THICKNESS+4)
         img = cv2.putText(img=img, text=upper_text,
                           org=pt_min,
                           fontFace=TEXT_FONT,
@@ -96,6 +108,10 @@ def box(img: MatLike, box: fr.Box,
         img = cv2.rectangle(img=img, pt1=(pt_min[0], pt_max[1]),
                             pt2=(pt_min[0]+tsize[0], pt_max[1]+tsize[1]),
                             color=BOX_COLOR, thickness=-1)
+        # img = cv2.putText(img=img, text=lower_text,
+        #                   org=(pt_min[0], pt_max[1]+tsize[1]),
+        #                   fontFace=TEXT_FONT,
+        #                   fontScale=TEXT_SIZE, color=HALO_COLOR, thickness=TEXT_THICKNESS+4)
         img = cv2.putText(img=img, text=lower_text,
                           org=(pt_min[0], pt_max[1]+tsize[1]),
                           fontFace=TEXT_FONT,
