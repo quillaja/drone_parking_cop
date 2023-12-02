@@ -1,4 +1,5 @@
 import argparse
+import time
 from pathlib import Path
 
 from app.application import Application
@@ -33,11 +34,18 @@ def main(args: argparse.Namespace):
         print(f"segment selection {args.segment} is not in the acceptable range of 0-{num_segs-1}.")
         return
 
+    vm = app.get_video_metrics()
+    print(f"{args.video.name}: {vm.width}x{vm.height}, {vm.frames} frames, {vm.length_sec:0.1f}s, {vm.fps:0.2f} fps")
+
+    start = time.perf_counter()
     print(f"Processing video...")
     app.select_active_log(args.segment)
-    app.output_video = "output.avi"
+    app.output_video = args.video.stem + "_annotated.avi"
     app.run()
     print(f"Finished processing.")
+    print(f"Took {time.perf_counter()-start:0.1f}s")
+
+    app.produce_statistics().to_csv(args.video.stem+"_results.csv", index=False)
 
 
 def parse_args() -> argparse.Namespace:
