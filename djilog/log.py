@@ -24,12 +24,14 @@ class FlightLog:
     DRONE_LOC_COL = "geometry"
 
     def __init__(self, log_segment: gp.GeoDataFrame, ground_dem_filename: str,
-                 ground_fudge_factor: float = 2.5) -> None:
+                 ground_fudge_factor: float = 2.5,
+                 compass_fudge_factor: float = -4.0) -> None:
         """
         Prepare a pre-chosen subset of a complete DJI drone log to be queried
         for drone information at each video frame.
         """
         self.df = log_segment
+        self.df[Cols.HEADING] = self.df[Cols.HEADING] + compass_fudge_factor
         # add ground elevation under drone and camera target position
         self.df[FlightLog.GROUND_COL] = ground_elevation(
             self.df.geometry, ground_dem_filename)+ground_fudge_factor
