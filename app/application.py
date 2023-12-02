@@ -1,3 +1,4 @@
+import enum
 import itertools
 from datetime import datetime
 from pathlib import Path
@@ -6,6 +7,7 @@ from typing import NamedTuple
 
 import cv2
 import easyocr
+import pandas as pd
 from cv2.typing import MatLike
 from ultralytics import YOLO
 
@@ -109,6 +111,18 @@ class Application:
         self.active_segment = index
         self.log = djilog.FlightLog(log_segment=self.video_segments[index],
                                     ground_dem_filename=PCC_DEM)
+
+    def produce_statistics(self) -> pd.DataFrame:
+        data = {"frame": [], "track_id": [], "confidence": [], "text": [], "found": []}
+        for frame, plates in enumerate(self.results.frames):
+            for p in plates:
+                data["frame"].append(frame)
+                data["track_id"].append(p.track_id)
+                data["confidence"].append(p.confidence)
+                data["text"].append(p.text)
+                data["found"].append(self.vehicles.find_vehicle_by_plate(p.text) is not None)
+
+        return pd.DataFrame(data)
 
     def _draw_frame_marks(self, frame: MatLike, cropbox: fr.Box, vidbox: fr.Box):
         """draw representations of cropbox and vidbox."""
