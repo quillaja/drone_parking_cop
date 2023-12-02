@@ -1,4 +1,5 @@
 import re
+from dataclasses import dataclass
 from typing import Callable, NamedTuple, Protocol
 
 import cv2
@@ -233,7 +234,8 @@ class EasyOCRReader:
         return plate_texts
 
 
-class Plate(NamedTuple):
+@dataclass
+class Plate:
     """
     A license plate found and read from a video frame.
     """
