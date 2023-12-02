@@ -193,6 +193,7 @@ class EasyOCRReader:
         self.filter = filter if filter is not None else lambda x: True
 
     def read(self, frame: MatLike, detections: list[ObjectDetection]) -> list[TextRecognition]:
+        UNKNOWN = "?"
         plate_texts: list[TextRecognition] = []
         for d in detections:
             # get a crop of the frame containing just the plate
@@ -205,7 +206,7 @@ class EasyOCRReader:
                 plate_texts.append(TextRecognition(
                     track_id=d.track_id,
                     confidence=0,
-                    text="HI MOM"))
+                    text=UNKNOWN))
                 continue
             plate_crop = crop(frame, plate_box)
             # do OCR
@@ -229,7 +230,7 @@ class EasyOCRReader:
                 plate_texts.append(TextRecognition(
                     track_id=d.track_id,
                     confidence=0,
-                    text="HI MOM"))
+                    text=UNKNOWN))
 
         return plate_texts
 
