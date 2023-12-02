@@ -1,0 +1,70 @@
+plate,state,permit_number,permit_kind,make,color,is_ev,note
+168GNW,OR,1,staff,Mazda,silver,false,
+046LLK,OR,2,staff,Subaru,black,false,
+OB4549,OR,3,staff,Toyota,black,false,
+372NKQ,OR,4,staff,Honda,silver,false,
+608NMQ,OR,5,staff,Toyota,silver,false,
+LSSU,OR,6,staff,Honda,white,false,
+,,7,staff,Toyota,teal,false,dealer plate
+977LJC,OR,8,staff,Nissan,gray,true,
+YLE573,OR,9,staff,Toyota,gray,false,
+307CWV,OR,10,staff,Mazda,red,false,
+35449,OR,11,staff,Honda,silver,false,
+105KDU,OR,12,staff,Subaru,black,false,
+863ENM,OR,13,staff,Honda,white,false,
+709NAS,OR,14,staff,Honda,blue,false,
+966GOZ,OR,15,staff,Toyota,red,false,
+187HYC,OR,16,staff,Fiat,black,false,
+455HQM,OR,17,staff,Toyota,blue,false,
+195FDS,OR,18,staff,Toyota,black,false,
+541NXC,OR,19,staff,Subaru,white,false,
+137PKH,OR,20,staff,Kia,black,false,
+0887652,,21,staff,Mini,red,false,temporary tag
+875NYE,OR,22,staff,Honda,black,false,
+GCSD,OR,23,staff,Mini,red,false,
+930LYW,OR,24,staff,Lexus,gray,false,
+389LYB,OR,25,staff,Honda,black,false,
+575KGZ,OR,25,staff,Toyota,purple,false,
+693NEP,OR,27,staff,Volvo,black,false,
+511NMP,OR,28,handicap,Tesla,black,true,
+5595,OR,29,handicap,Kia,blue,false,
+339BVF,OR,30,handicap,Ford,red,false,back row
+805443,OR,31,staff,Subaru,white,false,back row
+277BRW,OR,32,staff,Scion,white,false,back row
+251MLS,OR,33,staff,Toyota,red,false,back row;can't see complete plate
+845EXZ,OR,34,staff,Hyundai,blue,false,back row
+054NXC,OR,35,staff,Toyota,white,false,back row
+289KRW,OR,36,staff,Lexus,white,false,back row;can't see complete plate
+663PEU,OR,37,staff,Volvo,gray,false,back row
+BTG0228,WA,38,staff,Toyota,silver,false,back row
+459NDM,OR,39,staff,Kia,silver,false,back row
+831PBV,OR,40,staff,Toyota,white,false,back row
+,,41,staff,Subaru,white,false,back row; dealer plate
+524MYL,OR,42,staff,Toyota,gray,false,back row
+011JTB,OR,43,staff,Toyota,silver,false,back row
+288PAL,OR,44,staff,Audi,gray,false,back row
+705NWP,OR,45,staff,Subaru,white,false,back row
+281FRR,OR,46,general,Honda,black,false,
+510KBQ,OR,47,general,Acura,gray,false,
+072HFA,OR,48,general,Volkswagen,gray,false,
+816PHF,OR,49,general,Subaru,blue,false,plate in window
+852LFA,OR,50,general,Toyota,gray,false,
+ZXB138,OR,51,general,Honda,green,false,
+510NKN,OR,52,general,Kia,gray,false,
+524NBT,OR,53,general,Toyota,silver,false,
+TOK3D,OR,54,general,Subaru,gray,false,
+282NJE,OR,55,general,Ford,blue,false,
+877KAH,OR,56,general,Volkswagen,silver,false,
+06212,OR,57,general,Nissan,blue,false,
+667MYN,OR,58,general,Mercedes,white,false,
+606PMK,OR,59,general,Hyundai,gray,false,
+073PDE,OR,60,general,Toyota,gray,false,
+345FYE,OR,61,general,Nissan,silver,false,back row
+49225,OR,62,general,Mini,black,false,
+284806,OR,63,general,Ford,white,false,
+XJL121,OR,64,general,Pontiac,green,false,
+882LXAZ,OR,65,general,Subaru,white,false,back row;leaving space
+469JAA,OR,66,general,Kia,gray,false,back row
+693324,ID,67,general,Nissan,black,false,back row;hard to read plate
+227GDX,OR,68,general,Kia,gray,false,back row
+CLXH895,Ontario,69,general,Subaru,blue,false,back row;hard to read plate
